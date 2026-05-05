@@ -269,6 +269,7 @@
     .pacing-fill.over { background: var(--red); }
     .pacing-pct { font-size: 12px; font-weight: 700; text-align: right; }
     .pacing-proj { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    body.locked .pacing-detail { display: none; }
 
     /* ── ③ 이상치 ── */
     .anomaly-tag { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; margin-left: 4px; display: inline-block; }
@@ -1427,7 +1428,7 @@ const UI = {
           <div style="font-size:11px;color:var(--muted);">${r.label}</div>
           <div>
             <div class="pacing-track"><div class="pacing-fill ${cls}" style="width:${Math.min(pct,100)}%"></div></div>
-            <div class="pacing-proj">${fmtV(r.actual,r.unit)} / ${fmtV(r.target,r.unit)} &nbsp;·&nbsp; 월말 예상 ${fmtV(r.projected,r.unit)} (${projPct}%)</div>
+            <div class="pacing-proj pacing-detail">${fmtV(r.actual,r.unit)} / ${fmtV(r.target,r.unit)} &nbsp;·&nbsp; 월말 예상 ${fmtV(r.projected,r.unit)} (${projPct}%)</div>
           </div>
           <div class="pacing-pct ${cls==='over'?'neg':cls==='ok'?'pos':'warn-text'}">${Math.round(pct)}%</div>
         </div>`;
@@ -2505,7 +2506,7 @@ const Deployer = {
         const fname = document.getElementById('fname').textContent.replace(/^ — /, '').trim();
         files.push({
           path: 'data.json',
-          content: JSON.stringify({ fileName: fname, updatedAt: new Date().toISOString(), rows: Store.raw })
+          content: JSON.stringify({ fileName: fname, updatedAt: new Date().toISOString(), rows: Store.raw, targets: JSON.parse(localStorage.getItem('jb_targets')||'{}') })
         });
       }
 
@@ -2592,7 +2593,13 @@ async function initDashboard() {
   try {
     const res = await fetch(`${RAW}/data.json?t=${Date.now()}`);
     if (res.ok) {
-      const { fileName, updatedAt, rows } = await res.json();
+      const { fileName, updatedAt, rows, targets } = await res.json();
+        if (targets && Object.keys(targets).length) {
+          // 로컬에 저장된 목표가 없을 때만 배포된 목표 사용 (관리자 입력값 우선)
+          if (!localStorage.getItem('jb_targets')) {
+            localStorage.setItem('jb_targets', JSON.stringify(targets));
+          }
+        }
       if (rows?.length) {
         Store.load(rows);
         document.getElementById('fname').textContent = ' — ' + fileName;
