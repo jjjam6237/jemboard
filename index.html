@@ -394,7 +394,13 @@
 
 <header class="header">
   <div class="logo">🎯 잼시보드<small id="fname" style="display:none;"></small></div>
-  <span id="view-count" style="font-size:11px;color:var(--muted);margin-left:2px;"></span>
+  <span id="view-count" style="font-size:11px;color:var(--muted);margin-left:2px;cursor:default;position:relative;">
+    <span id="view-count-text"></span>
+    <div id="view-stats-popup" style="display:none;position:absolute;top:24px;left:0;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:200px;z-index:500;box-shadow:0 8px 24px rgba(0,0,0,.3);white-space:nowrap;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">출처별 조회수</div>
+      <div id="view-stats-list"></div>
+    </div>
+  </span>
   <button id="btn-lock" onclick="Lock.lock()" title="데이터 잠금" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;display:none;" title="잠금">🔓</button>
   <div class="tab-bar">
     <button class="tab-btn active" id="tab-campaign" onclick="switchTab('campaign')">📊 캠페인 개요</button>
@@ -3244,14 +3250,77 @@ async function initDashboard() {
   }
 }
 
+const SOURCE_LABELS = {
+  wanted:   '원티드',
+  saramin:  '사람인',
+  jobkorea: '잡코리아',
+  incruit:  '인크루트',
+  linkedin: '링크드인',
+  jumpit:   '점핏',
+  direct:   '직접 접속',
+};
+
 async function trackPageView() {
   try {
-    const res = await fetch('https://api.counterapi.dev/v1/jemboard-jjjam6237/visits/up');
-    if (!res.ok) return;
-    const { count } = await res.json();
-    const el = document.getElementById('view-count');
-    if (el && count) el.textContent = '👁 ' + Number(count).toLocaleString() + ' views';
+    const ref = new URLSearchParams(window.location.search).get('ref') || 'direct';
+    const ns = 'jemboard-jjjam6237';
+
+    const [totalRes] = await Promise.all([
+      fetch(`https://api.counterapi.dev/v1/${ns}/visits/up`),
+      fetch(`https://api.counterapi.dev/v1/${ns}-${ref}/visits/up`),
+    ]);
+    if (!totalRes.ok) return;
+    const { count } = await totalRes.json();
+    const textEl = document.getElementById('view-count-text');
+    if (textEl && count) textEl.textContent = '👁 ' + Number(count).toLocaleString() + ' views';
+
+    const vcEl = document.getElementById('view-count');
+    if (vcEl) {
+      vcEl.style.cursor = 'pointer';
+      vcEl.addEventListener('click', (e) => {
+        if (document.body.classList.contains('locked')) return;
+        e.stopPropagation();
+        const popup = document.getElementById('view-stats-popup');
+        if (!popup) return;
+        const isOpen = popup.style.display !== 'none';
+        popup.style.display = isOpen ? 'none' : 'block';
+        if (!isOpen) fetchSourceStats();
+      });
+      document.addEventListener('click', () => {
+        const popup = document.getElementById('view-stats-popup');
+        if (popup) popup.style.display = 'none';
+      });
+    }
   } catch(e) { /* silent fail */ }
+}
+
+async function fetchSourceStats() {
+  const ns = 'jemboard-jjjam6237';
+  const sources = Object.keys(SOURCE_LABELS);
+  const listEl = document.getElementById('view-stats-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<div style="color:var(--muted);font-size:11px;">불러오는 중...</div>';
+
+  const results = await Promise.all(
+    sources.map(src =>
+      fetch(`https://api.counterapi.dev/v1/${ns}-${src}/visits`)
+        .then(r => r.ok ? r.json() : { count: 0 })
+        .then(d => ({ src, count: d.count || 0 }))
+        .catch(() => ({ src, count: 0 }))
+    )
+  );
+
+  const rows = results.filter(r => r.count > 0).sort((a, b) => b.count - a.count);
+  if (!rows.length) {
+    listEl.innerHTML = '<div style="color:var(--muted);font-size:11px;">아직 출처별 데이터 없음</div>';
+    return;
+  }
+  listEl.innerHTML = rows.map(r =>
+    `<div style="display:flex;justify-content:space-between;gap:24px;font-size:12px;padding:2px 0;color:var(--text);">
+      <span>${SOURCE_LABELS[r.src] || r.src}</span>
+      <span style="color:var(--accent);font-weight:600;">${Number(r.count).toLocaleString()}</span>
+    </div>`
+  ).join('');
 }
 
 initDashboard();
