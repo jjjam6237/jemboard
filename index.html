@@ -346,7 +346,9 @@
     body.locked .kw-table td,
     body.locked .cmp-curr,
     body.locked .cmp-prev,
-    body.locked .cmp-change { filter: blur(6px); user-select: none; pointer-events: none; transition: filter .3s; }
+    body.locked .cmp-change,
+    body.locked .conv-kpi-value,
+    body.locked .mini-chg { filter: blur(6px); user-select: none; pointer-events: none; transition: filter .3s; }
     body:not(.locked) .kpi-value,
     body:not(.locked) .kpi-change,
     body:not(.locked) canvas,
@@ -573,8 +575,9 @@
         <div class="tscroll">
           <table><thead id="t-head"></thead><tbody id="t-body"></tbody></table>
         </div>
-        <div id="table-expand-wrap" style="display:none;text-align:center;padding:14px 0 4px;">
+        <div id="table-expand-wrap" style="display:none;text-align:center;padding:14px 0 4px;display:flex;gap:8px;justify-content:center;">
           <button class="btn btn-secondary" id="table-expand-btn" onclick="UI.expandTable()">+ 30일 더 보기</button>
+          <button class="btn btn-secondary" id="table-collapse-btn" style="display:none;" onclick="UI.collapseTable()">▲ 접기</button>
         </div>
       </div>
     </div>
@@ -1729,6 +1732,12 @@ const UI = {
     this.renderTable();
   },
 
+  collapseTable() {
+    this.tableShowCount = 30;
+    this.renderTable();
+    document.getElementById('card-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  },
+
   renderTable() {
     // 테이블 전용 달력이 없으면 먼저 생성
     if (!DP.instances['dp-table-wrap']) this.initTableDP();
@@ -1744,10 +1753,14 @@ const UI = {
 
     document.getElementById('row-count').textContent = `${visible.length} / ${total}일`;
     const expandWrap = document.getElementById('table-expand-wrap');
+    const canCollapse = this.tableShowCount > 30;
     if (expandWrap) {
-      expandWrap.style.display = hasMore ? 'block' : 'none';
+      expandWrap.style.display = (hasMore || canCollapse) ? 'flex' : 'none';
       const remaining = Math.min(30, total - this.tableShowCount);
-      document.getElementById('table-expand-btn').textContent = `+ ${remaining}일 더 보기`;
+      const expandBtn = document.getElementById('table-expand-btn');
+      const collapseBtn = document.getElementById('table-collapse-btn');
+      if (expandBtn) { expandBtn.textContent = `+ ${remaining}일 더 보기`; expandBtn.style.display = hasMore ? '' : 'none'; }
+      if (collapseBtn) collapseBtn.style.display = canCollapse ? '' : 'none';
     }
 
     const cols = [
@@ -2683,20 +2696,28 @@ const KWUI = {
           <tbody>${tableRows}</tbody>
         </table>
       </div>
-      ${hasMore ? `<div style="text-align:center;padding:10px 0 2px;">
-        <button class="btn btn-secondary btn-sm" onclick="KWUI.expandConv('${media}')">+ ${Math.min(10, rows.length-count)}개 더 보기</button>
+      ${(hasMore || count > 10) ? `<div style="display:flex;gap:6px;justify-content:center;padding:10px 0 2px;">
+        ${hasMore ? `<button class="btn btn-secondary btn-sm" onclick="KWUI.expandConv('${media}')">+ ${Math.min(10, rows.length-count)}개 더 보기</button>` : ''}
+        ${count > 10 ? `<button class="btn btn-secondary btn-sm" onclick="KWUI.collapseConv('${media}')">▲ 접기</button>` : ''}
       </div>` : ''}
     </div>`;
   },
 
   expandConv(media) {
     this._convShowCount[media] = (this._convShowCount[media] || 10) + 10;
-    const rows = this._convAllRows[media] || [];
-    const col = document.getElementById('kw-conv-media-grid');
-    // 해당 매체 컬럼만 업데이트
+    this._redrawConvGrid();
+  },
+
+  collapseConv(media) {
+    this._convShowCount[media] = 10;
+    this._redrawConvGrid();
+  },
+
+  _redrawConvGrid() {
     const MEDIA_ORDER = ['네이버','구글','카카오','당근'];
     const activeMedia = MEDIA_ORDER.filter(m => this._convAllRows[m]?.length);
-    col.innerHTML = activeMedia.map(m => this._renderConvMediaCol(m, this._convAllRows[m])).join('');
+    document.getElementById('kw-conv-media-grid').innerHTML =
+      activeMedia.map(m => this._renderConvMediaCol(m, this._convAllRows[m])).join('');
   },
 
   exportCSV() { KWStore.exportCSV(); },
