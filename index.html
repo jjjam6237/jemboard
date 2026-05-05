@@ -417,7 +417,10 @@
     <div class="table-card collapsible" id="card-table">
       <div class="table-hd">
         <div class="card-title-row" style="width:100%;">
-          <span>일별 집계 테이블</span>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span style="font-weight:600;font-size:13px;">일별 집계 테이블</span>
+            <div id="dp-table-wrap" style="width:230px;"></div>
+          </div>
           <div style="display:flex;gap:8px;align-items:center;">
             <span style="font-size:11px;color:var(--muted);" id="row-count"></span>
             <button class="btn btn-secondary btn-sm" onclick="Store.exportCSV()">⬇ CSV</button>
@@ -428,6 +431,9 @@
       <div class="chart-body">
         <div class="tscroll">
           <table><thead id="t-head"></thead><tbody id="t-body"></tbody></table>
+        </div>
+        <div id="table-expand-wrap" style="display:none;text-align:center;padding:14px 0 4px;">
+          <button class="btn btn-secondary" id="table-expand-btn" onclick="UI.expandTable()">+ 30일 더 보기</button>
         </div>
       </div>
     </div>
@@ -1202,6 +1208,8 @@ const UI = {
     this.renderKPIs();
     this.renderInsights();
     CH.renderAll();
+    this.tableShowCount = 30;
+    delete DP.instances['dp-table-wrap']; // 필터 바뀌면 테이블 달력도 초기화
     this.renderTable();
     this.updateDataRange();
   },
@@ -1267,8 +1275,50 @@ const UI = {
       `<div class="ins ${i.type}"><span class="ins-icon">${i.icon}</span><span>${i.text}</span></div>`).join('');
   },
 
+  tableShowCount: 30,
+
+  initTableDP() {
+    const allBd = Store.byDate();
+    if (!allBd.length) return;
+    const dates = allBd.map(r => r.date).sort();
+    const minD = dates[0], maxD = dates[dates.length - 1];
+    // 기본값: 최근 30일
+    const defToDate = new Date(maxD + 'T00:00:00');
+    const defFromDate = new Date(defToDate);
+    defFromDate.setDate(defFromDate.getDate() - 29);
+    const defFrom = defFromDate.toISOString().slice(0, 10) < minD ? minD : defFromDate.toISOString().slice(0, 10);
+    DP.create('dp-table-wrap', {
+      minDate: minD, maxDate: maxD, from: defFrom, to: maxD,
+      onChange: () => { this.tableShowCount = 30; this.renderTable(); },
+    });
+  },
+
+  expandTable() {
+    this.tableShowCount += 30;
+    this.renderTable();
+  },
+
   renderTable() {
-    const bd = [...Store.byDate()].reverse();
+    // 테이블 전용 달력이 없으면 먼저 생성
+    if (!DP.instances['dp-table-wrap']) this.initTableDP();
+
+    const allBd = [...Store.byDate()].reverse(); // 최신순
+    const { from: tf, to: tt } = DP.getRange('dp-table-wrap');
+    const bd = allBd.filter(r =>
+      (!tf || r.date >= tf) && (!tt || r.date <= tt)
+    );
+    const total = bd.length;
+    const visible = bd.slice(0, this.tableShowCount);
+    const hasMore = total > this.tableShowCount;
+
+    document.getElementById('row-count').textContent = `${visible.length} / ${total}일`;
+    const expandWrap = document.getElementById('table-expand-wrap');
+    if (expandWrap) {
+      expandWrap.style.display = hasMore ? 'block' : 'none';
+      const remaining = Math.min(30, total - this.tableShowCount);
+      document.getElementById('table-expand-btn').textContent = `+ ${remaining}일 더 보기`;
+    }
+
     const cols = [
       {k:'date',label:'날짜'},{k:'impr',label:'노출수'},{k:'clicks',label:'클릭수'},
       {k:'ctr',label:'CTR'},{k:'cost',label:'광고비'},{k:'cpc',label:'CPC'},
@@ -1278,15 +1328,14 @@ const UI = {
     ];
     document.getElementById('t-head').innerHTML =
       `<tr>${cols.map(c=>`<th>${c.label}</th>`).join('')}</tr>`;
-    document.getElementById('t-body').innerHTML = bd.map((row,i)=>{
-      const prev = bd[i+1];
+    document.getElementById('t-body').innerHTML = visible.map((row,i)=>{
+      const prev = visible[i+1];
       return `<tr>${cols.map(c=>{
         if (c.k==='date') return `<td>${row.date}</td>`;
         const v=row[c.k]||0, p=prev?.[c.k]||0;
         let badge='';
         if (prev&&p>0) {
           const pct=(v-p)/p*100;
-          const lb=LOWER_BETTER.has(c.k);
           badge=`<span class="badge ${pct>=0?'up':'dn'}">${pct>0?'+':''}${pct.toFixed(1)}%</span>`;
         }
         return `<td>${fmt(c.k,v)}${badge}</td>`;
