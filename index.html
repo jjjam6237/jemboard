@@ -392,7 +392,7 @@
     <!-- 페이싱 카드 -->
     <div class="chart-card collapsible hidden" id="card-pacing">
       <div class="card-title-row">
-        <div class="title-left">🎯 목표 대비 페이싱</div>
+        <div class="title-left" id="pacing-title">📊 월별 KPI 달성 현황</div>
         <button class="collapse-btn" onclick="UI.toggleCard('card-pacing')">−</button>
       </div>
       <div class="chart-body" id="pacing-body"></div>
@@ -1400,39 +1400,76 @@ const UI = {
     try { t = JSON.parse(localStorage.getItem('jb_targets')||'{}'); } catch(e) { t = {}; }
     if (!t.cost && !t.conv && !t.rev) { document.getElementById('card-pacing').classList.add('hidden'); return; }
 
-    const bd = Store.byDate();
-    if (!bd.length) return;
+    // 가장 최근 월 데이터만 사용 (사이드바 필터 무관)
+    const allDates = Store.raw.map(r=>r.date).sort();
+    if (!allDates.length) return;
+    const ym = allDates[allDates.length-1].slice(0,7);
+    const [y, mo] = ym.split('-').map(Number);
+    const daysInMonth = new Date(y, mo, 0).getDate();
+    const monthRows = Store.raw.filter(r=>r.date.startsWith(ym));
+    const activeDays = new Set(monthRows.map(r=>r.date)).size;
+    const tot = monthRows.reduce((a,r)=>{ a.cost+=r.cost; a.conv+=r.conv; a.rev+=r.revenue; return a; }, {cost:0,conv:0,rev:0});
+    const proj = {
+      cost: activeDays ? tot.cost/activeDays*daysInMonth : 0,
+      conv: activeDays ? tot.conv/activeDays*daysInMonth : 0,
+      rev:  activeDays ? tot.rev /activeDays*daysInMonth : 0,
+    };
 
-    // 현재 기간 집계
-    const tot = bd.reduce((a,r)=>{ a.cost+=r.cost; a.conv+=r.conv; a.revenue+=r.revenue; return a; }, {cost:0,conv:0,revenue:0});
+    const items = [
+      { icon:'💰', label:'광고비',   actual:tot.cost, target:t.cost, projected:proj.cost, unit:'₩' },
+      { icon:'🎯', label:'전환수',   actual:tot.conv, target:t.conv, projected:proj.conv, unit:''  },
+      { icon:'📈', label:'전환매출', actual:tot.rev,  target:t.rev,  projected:proj.rev,  unit:'₩' },
+    ].filter(x=>x.target>0);
 
-    // 기간 내 일수 → 일평균으로 월 환산
-    const days = bd.length;
-    const proj = { cost: tot.cost/days*30, conv: tot.conv/days*30, revenue: tot.revenue/days*30 };
+    const fmtV = (v, unit) => {
+      const n = Math.round(v);
+      if (unit==='₩') {
+        if (n>=100000000) return '₩'+(n/100000000).toFixed(1)+'억';
+        if (n>=10000000)  return '₩'+(n/10000000).toFixed(1)+'천만';
+        if (n>=10000)     return '₩'+(n/10000).toFixed(0)+'만';
+        return '₩'+n.toLocaleString();
+      }
+      return n.toLocaleString()+'건';
+    };
 
-    const rows = [
-      { label:'광고비', actual: tot.cost,    target: t.cost, projected: proj.cost,    unit:'₩' },
-      { label:'전환수', actual: tot.conv,    target: t.conv, projected: proj.conv,    unit:'' },
-      { label:'전환매출', actual: tot.revenue, target: t.rev,  projected: proj.revenue, unit:'₩' },
-    ].filter(r => r.target > 0);
+    const arcColor = p => p>=100?'#2ecc71':p>=70?'#4c9eff':'#f39c12';
+    const statusLabel = p => p>=100?'🎉 목표 달성':p>=70?'순항 중 👍':'주의 필요 ⚠️';
+    const arc = (p, c) => {
+      const d = Math.min(p,100).toFixed(1), gap=(100-Math.min(p,100)).toFixed(1);
+      return `<svg viewBox="0 0 36 36" width="90" height="90">
+        <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--border)" stroke-width="3"/>
+        <circle cx="18" cy="18" r="15.9" fill="none" stroke="${c}" stroke-width="3"
+          stroke-dasharray="${d} ${gap}" stroke-linecap="round" transform="rotate(-90 18 18)"
+          style="transition:stroke-dasharray .8s ease;"/>
+      </svg>`;
+    };
 
-    const fmtV = (v, unit) => unit === '₩' ? '₩' + Math.round(v).toLocaleString() : Math.round(v).toLocaleString();
+    const monthLabel = `${y}년 ${mo}월`;
+    document.getElementById('pacing-title').innerHTML =
+      `📊 월별 KPI 달성 현황 <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:4px;">${monthLabel}</span>`;
 
     document.getElementById('card-pacing').classList.remove('hidden');
-    document.getElementById('pacing-body').innerHTML = rows.map(r => {
-      const pct = Math.min(r.actual / r.target * 100, 150);
-      const cls = pct >= 100 ? 'over' : pct >= 70 ? 'ok' : 'warn';
-      const projPct = Math.round(r.projected / r.target * 100);
-      return `
-        <div class="pacing-bar-row">
-          <div style="font-size:11px;color:var(--muted);">${r.label}</div>
-          <div>
-            <div class="pacing-track"><div class="pacing-fill ${cls}" style="width:${Math.min(pct,100)}%"></div></div>
-            <div class="pacing-proj pacing-detail">${fmtV(r.actual,r.unit)} / ${fmtV(r.target,r.unit)} &nbsp;·&nbsp; 월말 예상 ${fmtV(r.projected,r.unit)} (${projPct}%)</div>
-          </div>
-          <div class="pacing-pct ${cls==='over'?'neg':cls==='ok'?'pos':'warn-text'}">${Math.round(pct)}%</div>
-        </div>`;
-    }).join('');
+    document.getElementById('pacing-body').innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(${items.length},1fr);gap:14px;padding:6px 2px;">
+        ${items.map(x=>{
+          const p = x.target>0 ? x.actual/x.target*100 : 0;
+          const projP = x.target>0 ? Math.round(x.projected/x.target*100) : 0;
+          const c = arcColor(p);
+          return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:18px 14px;text-align:center;">
+            <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:14px;">${x.icon} ${x.label}</div>
+            <div style="position:relative;display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px;">
+              ${arc(p,c)}
+              <div style="position:absolute;display:flex;flex-direction:column;align-items:center;">
+                <span style="font-size:18px;font-weight:800;color:${c};line-height:1;">${Math.round(p)}%</span>
+              </div>
+            </div>
+            <div style="font-size:11px;font-weight:600;color:${c};margin-bottom:8px;">${statusLabel(p)}</div>
+            <div class="pacing-detail" style="font-size:11px;color:var(--muted);">달성 &nbsp;<strong style="color:var(--text);">${fmtV(x.actual,x.unit)}</strong></div>
+            <div class="pacing-detail" style="font-size:10px;color:var(--muted);margin-top:3px;">월말 예상 &nbsp;<strong style="color:${c};">${fmtV(x.projected,x.unit)}</strong> &nbsp;(${projP}%)</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="pacing-detail" style="font-size:10px;color:var(--muted);text-align:right;margin-top:4px;">* ${activeDays}일 기준 예상 / ${monthLabel} 전체 ${daysInMonth}일</div>`;
   },
 
   selectKPI(m, el) {
