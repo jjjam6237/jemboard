@@ -251,6 +251,37 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .loading-text { color: var(--text); font-size: 14px; }
 
+    /* ── ① 기간 비교 모드 ── */
+    .compare-toggle { padding: 4px 10px; border-radius: 5px; font-size: 11px; cursor: pointer; background: var(--bg2); color: var(--muted); border: 1px solid var(--border); transition: all .12s; }
+    .compare-toggle.on { background: rgba(76,158,255,.15); color: var(--blue); border-color: rgba(76,158,255,.3); }
+    .kpi.compare .kpi-value { font-size: 16px; }
+    .kpi-prev { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .kpi-prev span { color: var(--text); font-weight: 600; }
+
+    /* ── ② 페이싱 ── */
+    .pacing-inp { width: 100%; padding: 5px 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 11px; margin-bottom: 5px; }
+    .pacing-inp:focus { outline: none; border-color: var(--blue); }
+    .pacing-bar-row { display: grid; grid-template-columns: 64px 1fr 48px; gap: 8px; align-items: center; margin-bottom: 10px; }
+    .pacing-track { height: 7px; background: var(--border); border-radius: 4px; overflow: hidden; }
+    .pacing-fill { height: 100%; border-radius: 4px; transition: width .5s; }
+    .pacing-fill.ok   { background: var(--green); }
+    .pacing-fill.warn { background: var(--orange); }
+    .pacing-fill.over { background: var(--red); }
+    .pacing-pct { font-size: 12px; font-weight: 700; text-align: right; }
+    .pacing-proj { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+    /* ── ③ 이상치 ── */
+    .anomaly-tag { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; margin-left: 4px; display: inline-block; }
+    .anomaly-up  { background: rgba(231,76,60,.15);  color: var(--red); }
+    .anomaly-dn  { background: rgba(46,204,113,.15); color: var(--green); }
+
+    /* ── ④ 키워드 트렌드 ── */
+    .kw-row-click { cursor: pointer; }
+    .kw-row-click:hover td { background: #eef4ff !important; }
+    .kw-trend-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+    .kw-ttab { padding: 3px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; background: #f0f3f8; color: #6b7280; border: 1px solid #e2e6f0; }
+    .kw-ttab.on { background: #3a7fd4; color: #fff; border-color: #3a7fd4; }
+
     /* ── 블러 잠금 ── */
     body.locked .csv-btn { display: none !important; }
     body.locked .admin-btn { display: none !important; }
@@ -338,10 +369,33 @@
         <div id="ms-c-route"  class="ms-wrap"></div>
       </div>
     </div>
+    <div class="sb-section">
+      <div class="sb-label">월 목표 설정</div>
+      <div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:2px;">광고비 목표 (₩)</div>
+        <input class="pacing-inp" id="target-cost" type="text" placeholder="예: 50,000,000" oninput="UI.saveTargets()">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:2px;">전환수 목표</div>
+        <input class="pacing-inp" id="target-conv" type="text" placeholder="예: 2,000" oninput="UI.saveTargets()">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:2px;">전환매출 목표 (₩)</div>
+        <input class="pacing-inp" id="target-rev" type="text" placeholder="예: 200,000,000" oninput="UI.saveTargets()">
+      </div>
+    </div>
   </aside>
 
   <main class="content">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
+      <button class="compare-toggle" id="btn-compare" onclick="UI.toggleCompare(this)">⚖ 기간 비교</button>
+    </div>
     <div id="kpi-grid" class="kpi-grid"></div>
+
+    <!-- 페이싱 카드 -->
+    <div class="chart-card collapsible hidden" id="card-pacing">
+      <div class="card-title-row">
+        <div class="title-left">🎯 목표 대비 페이싱</div>
+        <button class="collapse-btn" onclick="UI.toggleCard('card-pacing')">−</button>
+      </div>
+      <div class="chart-body" id="pacing-body"></div>
+    </div>
 
     <div class="charts-grid">
       <!-- 일별 추이 (full width) -->
@@ -521,6 +575,21 @@
     </div><!-- /kw-layout -->
   </div><!-- /kw-main -->
 </div><!-- /page-keyword -->
+
+<!-- 키워드 트렌드 모달 -->
+<div id="kw-trend-modal" class="overlay hidden" onclick="if(event.target===this)KWUI.closeTrend()">
+  <div class="modal" style="width:700px;max-width:95vw;background:#fff;border-color:#e2e6f0;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div class="modal-title" id="kw-trend-title" style="color:#1a1d2e;margin:0;font-size:15px;"></div>
+      <button onclick="KWUI.closeTrend()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#9ca3af;">✕</button>
+    </div>
+    <div class="kw-trend-tabs" id="kw-trend-tabs"></div>
+    <div style="position:relative;height:260px;"><canvas id="kw-trend-canvas"></canvas></div>
+    <div id="kw-trend-no-data" class="hidden" style="text-align:center;padding:60px 0;color:#9ca3af;font-size:13px;">
+      📊 일별 데이터가 없습니다.<br><small style="font-size:11px;">배포된 데이터는 집계본이라 트렌드를 볼 수 없습니다.<br>로컬에서 파일을 직접 업로드하면 확인 가능합니다.</small>
+    </div>
+  </div>
+</div>
 
 <!-- 키워드 업로드 모달 -->
 <div id="kw-m-upload" class="overlay hidden" style="z-index:201;">
@@ -735,6 +804,20 @@ const Store = {
       if (routes?.length  && !routes.includes(r.route))   return false;
       return true;
     });
+  },
+
+  getAggForPeriod(from, to, devices, medias, routes) {
+    const rows = this.raw.filter(r => {
+      if (from && r.date < from) return false;
+      if (to   && r.date > to)   return false;
+      if (devices?.length && !devices.includes(r.device)) return false;
+      if (medias?.length  && !medias.includes(r.media))   return false;
+      if (routes?.length  && !routes.includes(r.route))   return false;
+      return true;
+    });
+    const agg = emptyAgg('');
+    rows.forEach(r => accumulate(agg, r));
+    return derived(agg);
   },
 
   byDate() {
@@ -1164,6 +1247,28 @@ const Ins = {
         text: `<strong>${topM[0]}</strong>에 전체 광고비의 <strong>${(topM[1]/totalCost*100).toFixed(0)}%</strong>가 집중되어 있습니다.<br>${this.a('단일 매체 의존도가 높으면 매체 정책 변경·알고리즘 업데이트 시 성과가 급락할 수 있습니다. 전체 예산의 10~15%를 다른 매체 테스트 예산으로 분리해 리스크를 분산하세요.')}` });
     }
 
+    // ⑩ 이상치 자동 감지 (7일 이동평균 대비 ±35% 이상)
+    if (bd.length >= 7) {
+      const anomalyMetrics = [['cost','광고비'],['conv','전환수'],['roas','ROAS'],['ctr','CTR']];
+      anomalyMetrics.forEach(([m, label]) => {
+        const window = bd.slice(-8, -1); // 직전 7일
+        const avg = window.reduce((s,r)=>s+(r[m]||0),0) / window.length;
+        if (avg === 0) return;
+        const todayVal = last[m] || 0;
+        const dev = (todayVal - avg) / avg * 100;
+        if (Math.abs(dev) < 35) return;
+        const lb = LOWER_BETTER.has(m);
+        const isGood = lb ? dev < 0 : dev > 0;
+        const tag = dev > 0
+          ? `<span class="anomaly-tag anomaly-up">+${dev.toFixed(0)}%</span>`
+          : `<span class="anomaly-tag anomaly-dn">${dev.toFixed(0)}%</span>`;
+        out.push({
+          type: isGood ? 'pos' : 'neg', icon: '🔍',
+          text: `이상치 감지 — <strong>${label}</strong> ${tag} 7일 평균(${fmt(m,avg)}) 대비 오늘(${last.date}) <strong>${fmt(m,todayVal)}</strong><br>${this.a(isGood ? `${label} 급등 원인(프로모션·시즌 등)을 파악하고, 동일 조건을 유지하거나 성공 요인을 다른 매체·노선에 적용하세요.` : `${label} 급락 원인을 긴급 점검하세요. 광고 소재 피로도, 예산 소진, 경쟁 강도 변화 여부를 확인하세요.`)}`,
+        });
+      });
+    }
+
     if (!out.length) out.push({ type:'neu', icon:'✅', text:'현재 주요 지표가 안정적으로 유지되고 있습니다. 지속 모니터링하세요.' });
     return out.slice(0, 10);
   },
@@ -1180,6 +1285,8 @@ const UI = {
     document.getElementById('main').classList.remove('hidden');
     this.renderSidebar();
     this.renderKPIs();
+    this.renderPacing();
+    this.loadTargets();
     this.renderTabs();
     CH.renderAll();
     this.renderInsights();
@@ -1209,10 +1316,11 @@ const UI = {
     const { from, to } = DP.getRange('dp-campaign');
     Store.filter({ from, to, devices: MS.getSelected('ms-c-device'), medias: MS.getSelected('ms-c-media'), routes: MS.getSelected('ms-c-route') });
     this.renderKPIs();
+    this.renderPacing();
     this.renderInsights();
     CH.renderAll();
     this.tableShowCount = 30;
-    delete DP.instances['dp-table-wrap']; // 필터 바뀌면 테이블 달력도 초기화
+    delete DP.instances['dp-table-wrap'];
     this.renderTable();
     this.updateDataRange();
   },
@@ -1224,21 +1332,105 @@ const UI = {
     document.getElementById('row-count').textContent = `${bd.length}일 집계`;
   },
 
+  compareMode: false,
+
+  toggleCompare(btn) {
+    this.compareMode = !this.compareMode;
+    btn.classList.toggle('on', this.compareMode);
+    this.renderKPIs();
+  },
+
   renderKPIs() {
     const bd = Store.byDate();
     const last = bd[bd.length-1]||{}, prev = bd[bd.length-2]||{};
     const keys = ['cost','impr','clicks','ctr','cpc','conv','cpa','revenue','roas','gaConv','appInstall'];
+
+    let cmpAgg = null;
+    if (this.compareMode) {
+      const { from, to } = DP.getRange('dp-campaign');
+      if (from && to) {
+        const ms = d => new Date(d + 'T00:00:00').getTime();
+        const days = Math.round((ms(to) - ms(from)) / 86400000) + 1;
+        const prevTo   = new Date(ms(from) - 86400000).toISOString().slice(0,10);
+        const prevFrom = new Date(ms(from) - days * 86400000).toISOString().slice(0,10);
+        const d = MS.getSelected('ms-c-device'), me = MS.getSelected('ms-c-media'), r = MS.getSelected('ms-c-route');
+        const curr = Store.getAggForPeriod(from, to, d, me, r);
+        cmpAgg = { curr, prev: Store.getAggForPeriod(prevFrom, prevTo, d, me, r), prevFrom, prevTo };
+      }
+    }
+
     document.getElementById('kpi-grid').innerHTML = keys.map((m,i) => {
-      const c=last[m]||0, p=prev[m]||0;
+      const c = cmpAgg ? (cmpAgg.curr[m]||0) : (last[m]||0);
+      const p = cmpAgg ? (cmpAgg.prev[m]||0) : (prev[m]||0);
       const pct = p>0?(c-p)/p*100:0;
       const lb=LOWER_BETTER.has(m), good=lb?pct<=0:pct>=0;
       const arrow=pct>0.05?'▲':pct<-0.05?'▼':'─';
       const cls=pct===0?'':(good?'pos':'neg');
-      return `<div class="kpi${i===0?' active':''}" onclick="UI.selectKPI('${m}',this)">
+      const compareRow = cmpAgg
+        ? `<div class="kpi-prev">이전 <span>${fmt(m,p)}</span> &nbsp;<span class="${cls}">${arrow}${Math.abs(pct).toFixed(1)}%</span></div>`
+        : `<div class="kpi-change ${cls}">${arrow} ${Math.abs(pct).toFixed(1)}% 전일대비</div>`;
+      return `<div class="kpi${i===0?' active':''}${cmpAgg?' compare':''}" onclick="UI.selectKPI('${m}',this)">
         <div class="kpi-label">${METRICS[m]?.label||m}</div>
         <div class="kpi-value">${fmt(m,c)}</div>
-        <div class="kpi-change ${cls}">${arrow} ${Math.abs(pct).toFixed(1)}% 전일대비</div>
+        ${compareRow}
       </div>`;
+    }).join('');
+  },
+
+  saveTargets() {
+    const parse = id => parseInt((document.getElementById(id)?.value||'').replace(/[^0-9]/g,''))||0;
+    const t = { cost: parse('target-cost'), conv: parse('target-conv'), rev: parse('target-rev') };
+    localStorage.setItem('jb_targets', JSON.stringify(t));
+    this.renderPacing();
+  },
+
+  loadTargets() {
+    try {
+      const t = JSON.parse(localStorage.getItem('jb_targets')||'{}');
+      const fmt = v => v ? v.toLocaleString() : '';
+      if (t.cost) document.getElementById('target-cost').value = fmt(t.cost);
+      if (t.conv) document.getElementById('target-conv').value = fmt(t.conv);
+      if (t.rev)  document.getElementById('target-rev').value  = fmt(t.rev);
+    } catch(e) {}
+  },
+
+  renderPacing() {
+    let t;
+    try { t = JSON.parse(localStorage.getItem('jb_targets')||'{}'); } catch(e) { t = {}; }
+    if (!t.cost && !t.conv && !t.rev) { document.getElementById('card-pacing').classList.add('hidden'); return; }
+
+    const bd = Store.byDate();
+    if (!bd.length) return;
+
+    // 현재 기간 집계
+    const tot = bd.reduce((a,r)=>{ a.cost+=r.cost; a.conv+=r.conv; a.revenue+=r.revenue; return a; }, {cost:0,conv:0,revenue:0});
+
+    // 기간 내 일수 → 일평균으로 월 환산
+    const days = bd.length;
+    const proj = { cost: tot.cost/days*30, conv: tot.conv/days*30, revenue: tot.revenue/days*30 };
+
+    const rows = [
+      { label:'광고비', actual: tot.cost,    target: t.cost, projected: proj.cost,    unit:'₩' },
+      { label:'전환수', actual: tot.conv,    target: t.conv, projected: proj.conv,    unit:'' },
+      { label:'전환매출', actual: tot.revenue, target: t.rev,  projected: proj.revenue, unit:'₩' },
+    ].filter(r => r.target > 0);
+
+    const fmtV = (v, unit) => unit === '₩' ? '₩' + Math.round(v).toLocaleString() : Math.round(v).toLocaleString();
+
+    document.getElementById('card-pacing').classList.remove('hidden');
+    document.getElementById('pacing-body').innerHTML = rows.map(r => {
+      const pct = Math.min(r.actual / r.target * 100, 150);
+      const cls = pct >= 100 ? 'over' : pct >= 70 ? 'ok' : 'warn';
+      const projPct = Math.round(r.projected / r.target * 100);
+      return `
+        <div class="pacing-bar-row">
+          <div style="font-size:11px;color:var(--muted);">${r.label}</div>
+          <div>
+            <div class="pacing-track"><div class="pacing-fill ${cls}" style="width:${Math.min(pct,100)}%"></div></div>
+            <div class="pacing-proj">${fmtV(r.actual,r.unit)} / ${fmtV(r.target,r.unit)} &nbsp;·&nbsp; 월말 예상 ${fmtV(r.projected,r.unit)} (${projPct}%)</div>
+          </div>
+          <div class="pacing-pct ${cls==='over'?'neg':cls==='ok'?'pos':'warn-text'}">${Math.round(pct)}%</div>
+        </div>`;
     }).join('');
   },
 
@@ -2008,7 +2200,8 @@ const KWUI = {
     document.getElementById('kw-tbody').innerHTML = paged.map(r => {
       const g = KWStore.grade(r);
       const [gc, gl] = gradeInfo[g] || gradeInfo.none;
-      return `<tr>
+      const kw=r.keyword.replace(/'/g,"\\'"), rt=(r.route||'').replace(/'/g,"\\'");
+      return `<tr class="kw-row-click" onclick="KWUI.showTrend('${kw}','${r.media}','${rt}','${r.device}')">
         <td>${r.keyword}</td>
         <td><span class="kw-media-tag ${mediaCls[r.media]||''}">${r.media}</span></td>
         <td>${r.route||'-'}</td>
@@ -2059,6 +2252,78 @@ const KWUI = {
   exportCSV() { KWStore.exportCSV(); },
   showUpload() { document.getElementById('kw-m-upload').classList.remove('hidden'); },
   hideUpload() { document.getElementById('kw-m-upload').classList.add('hidden'); document.getElementById('kw-file').value=''; },
+
+  _trendChart: null,
+  _trendMetric: 'cost',
+
+  showTrend(keyword, media, route, device) {
+    const entry = KWStore.raw.find(r => r.keyword===keyword && r.media===media && r.route===route && r.device===device);
+    const modal = document.getElementById('kw-trend-modal');
+    const canvas = document.getElementById('kw-trend-canvas');
+    const noData = document.getElementById('kw-trend-no-data');
+    document.getElementById('kw-trend-title').textContent = `📈 ${keyword} · ${media} · ${device}${route?' · '+route:''}`;
+    modal.classList.remove('hidden');
+
+    if (!entry?.daily || Object.keys(entry.daily).length === 0) {
+      canvas.classList.add('hidden'); noData.classList.remove('hidden'); return;
+    }
+    canvas.classList.remove('hidden'); noData.classList.add('hidden');
+
+    this._trendEntry = entry;
+    this._trendMetric = 'cost';
+    this._renderTrendChart();
+
+    const TMETS = [
+      {k:'cost',l:'광고비'},{k:'clicks',l:'클릭수'},{k:'conv',l:'전환수'},{k:'roas',l:'ROAS'},{k:'ctr',l:'CTR'}
+    ];
+    document.getElementById('kw-trend-tabs').innerHTML = TMETS.map(t =>
+      `<button class="kw-ttab${t.k==='cost'?' on':''}" onclick="KWUI._setTrendMetric('${t.k}',this)">${t.l}</button>`
+    ).join('');
+  },
+
+  _setTrendMetric(m, btn) {
+    this._trendMetric = m;
+    document.querySelectorAll('#kw-trend-tabs .kw-ttab').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    this._renderTrendChart();
+  },
+
+  _renderTrendChart() {
+    const entry = this._trendEntry;
+    if (!entry) return;
+    const m = this._trendMetric;
+    const dates = Object.keys(entry.daily).sort();
+    const data = dates.map(d => {
+      const v = entry.daily[d];
+      if (m === 'roas') return v.cost > 0 ? parseFloat((v.revenue/v.cost).toFixed(2)) : 0;
+      if (m === 'ctr')  return v.impr > 0  ? parseFloat((v.clicks/v.impr*100).toFixed(2)) : 0;
+      return v[m] || 0;
+    });
+    const MLABELS = {cost:'광고비',clicks:'클릭수',conv:'전환수',roas:'ROAS',ctr:'CTR(%)'};
+    if (this._trendChart) this._trendChart.destroy();
+    this._trendChart = new Chart(document.getElementById('kw-trend-canvas'), {
+      type: 'line',
+      data: { labels: dates.map(d=>d.slice(5)), datasets: [{
+        label: MLABELS[m]||m, data,
+        borderColor: '#3a7fd4', backgroundColor: '#3a7fd418',
+        tension: 0.3, fill: true, pointRadius: dates.length > 30 ? 0 : 3, borderWidth: 2,
+      }]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { mode:'index', intersect:false } },
+        scales: {
+          x: { ticks: { color:'#6b7280', font:{size:10}, maxTicksLimit:16 }, grid: { color:'#f3f4f6' } },
+          y: { ticks: { color:'#6b7280', font:{size:10} }, grid: { color:'#f3f4f6' } },
+        },
+      },
+    });
+  },
+
+  closeTrend() {
+    document.getElementById('kw-trend-modal').classList.add('hidden');
+    if (this._trendChart) { this._trendChart.destroy(); this._trendChart = null; }
+    this._trendEntry = null;
+  },
 };
 
 // ── 로컬 저장소 (자동 저장 / 복원) ────────────────────────────────────────────
