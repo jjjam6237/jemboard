@@ -1858,7 +1858,9 @@ const KWUI = {
       this.renderKPIs(); this.renderGrade(); KWCh.renderAll(); this.renderTable();
     };
     const MDOTS = { '네이버':'#03c75a','구글':'#4285f4','카카오':'#f7c600','당근':'#ff6f00' };
-    DP.create('dp-keyword', { minDate: minD, maxDate: maxD, from: minD, to: maxD, onChange: refresh });
+    const defFrom = '2026-04-28' >= minD && '2026-04-28' <= maxD ? '2026-04-28' : minD;
+    const defTo   = '2026-04-29' >= minD && '2026-04-29' <= maxD ? '2026-04-29' : maxD;
+    DP.create('dp-keyword', { minDate: minD, maxDate: maxD, from: defFrom, to: defTo, onChange: refresh });
     MS.create('ms-kw-media',  { label:'매체',   options: KWStore.medias,  dots: MDOTS,          onChange: refresh });
     MS.create('ms-kw-route',  { label:'노선',   options: KWStore.routes,                         onChange: refresh });
     MS.create('ms-kw-device', { label:'디바이스', options: KWStore.devices,                       onChange: refresh });
