@@ -301,7 +301,11 @@
     <button class="btn btn-primary btn-sm" onclick="UI.showUpload()">📁 리포트 업로드</button>
   </div>
   <div class="header-right hidden" id="hdr-keyword">
+    <span class="file-name" id="kw-data-range"></span>
+    <span class="file-name" style="color:var(--green);visibility:hidden;" id="kw-saved-info">● 자동저장됨</span>
     <button class="btn btn-secondary btn-sm" onclick="KWUI.exportCSV()">⬇ CSV</button>
+    <button class="btn btn-secondary btn-sm hidden" id="btn-reset-kw" onclick="JBStorage.clearAll()" style="color:var(--red);">× 초기화</button>
+    <button class="btn btn-secondary btn-sm hidden" id="btn-deploy-kw" onclick="Deployer.open()" style="color:#a78bfa;border-color:#7c3aed33;">🚀 배포하기</button>
     <button class="btn btn-primary btn-sm" onclick="KWUI.showUpload()">📁 키워드 업로드</button>
   </div>
 </header>
@@ -871,6 +875,8 @@ const Parser = {
           UI.render();
           JBStorage.saveCampaign(file.name, rows);
           document.getElementById('btn-deploy').classList.remove('hidden');
+          document.getElementById('btn-deploy-kw').classList.remove('hidden');
+          document.getElementById('btn-reset-kw').classList.remove('hidden');
         } catch(err) {
           UI.hideLoading();
           alert('파일 파싱 오류: ' + err.message);
@@ -1789,6 +1795,8 @@ const KWParser = {
           KWUI.render();
           JBStorage.saveKeyword(file.name, kwMap);
           document.getElementById('btn-deploy').classList.remove('hidden');
+          document.getElementById('btn-deploy-kw').classList.remove('hidden');
+          document.getElementById('btn-reset-kw').classList.remove('hidden');
         } catch(err) {
           UI.hideLoading();
           alert('파싱 오류: ' + err.message);
@@ -2298,6 +2306,8 @@ async function initDashboard() {
       UI.render();
       JBStorage._showSaved(c.fileName);
       document.getElementById('btn-deploy').classList.remove('hidden');
+      document.getElementById('btn-deploy-kw').classList.remove('hidden');
+      document.getElementById('btn-reset-kw').classList.remove('hidden');
       campaignLoaded = true;
     }
   }
