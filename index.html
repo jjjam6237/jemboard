@@ -363,118 +363,27 @@
     body:not(.locked) #lock-panel { display: none; }
     #lock-card { background: rgba(15,17,23,.9); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.1); border-radius: 20px; padding: 36px 40px; text-align: center; pointer-events: all; box-shadow: 0 24px 64px rgba(0,0,0,.6); min-width: 320px; }
 
-    /* ── 치즈냥이 (자는 고양이) ── */
-    .cat-scene { pointer-events:none; display:flex; flex-direction:column; align-items:center; width:130px; }
-    .cat-wrap  { position:relative; width:128px; height:88px; }
-
-    /* 몸통 */
-    .cat-body { position:absolute; right:8px; bottom:0;
-      width:88px; height:58px;
-      background:radial-gradient(circle at 36% 30%, #fdd07a, #e8821c);
-      border-radius:50%; box-shadow:3px 6px 14px rgba(0,0,0,.18), inset -4px -4px 10px rgba(180,80,10,.18);
-      animation:cat-breathe 3.4s ease-in-out infinite; }
-    @keyframes cat-breathe {
-      0%,100%{ transform:scaleY(1)   scaleX(1); }
-      50%    { transform:scaleY(1.08) scaleX(1.02); }
-    }
-    /* 배 */
-    .cat-belly { position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
-      width:52px; height:34px;
-      background:radial-gradient(circle at 44% 38%, #fff8e4, #fde8a8); border-radius:50%; }
-    /* 줄무늬 */
-    .cat-body::before, .cat-body::after {
-      content:''; position:absolute; background:rgba(190,90,10,.2); border-radius:50%;
-    }
-    .cat-body::before { width:7px; height:44px; top:6px; right:18px; transform:rotate(-14deg); }
-    .cat-body::after  { width:6px; height:36px; top:9px; right:30px; transform:rotate(-9deg); }
-
-    /* 앞발 */
-    .cat-paw { position:absolute; left:24px; bottom:0;
-      width:36px; height:20px;
-      background:radial-gradient(circle at 38% 34%, #fdd07a, #e8821c);
-      border-radius:50% 50% 60% 60%; box-shadow:1px 4px 7px rgba(0,0,0,.15); }
-    .cat-paw::after { content:''; position:absolute; bottom:4px; left:4px;
-      width:28px; height:11px;
-      background:rgba(255,248,220,.7); border-radius:50%; }
-
-    /* 꼬리 */
-    .cat-tail { position:absolute; right:2px; bottom:8px;
-      width:36px; height:36px;
-      border:7px solid #e8821c;
-      border-top-color:transparent; border-left-color:transparent;
-      border-radius:0 0 60% 0;
-      box-shadow:2px 2px 0 #c96c10 inset; }
-    .cat-tail::after { content:''; position:absolute; right:-7px; bottom:-7px;
-      width:15px; height:15px;
-      background:radial-gradient(circle at 40% 38%, #fdd07a, #e8821c);
-      border-radius:50%; box-shadow:1px 2px 5px rgba(0,0,0,.18); }
-
-    /* 머리 */
-    .cat-head { position:absolute; left:0; bottom:22px;
-      width:58px; height:54px;
-      background:radial-gradient(circle at 38% 32%, #fdd07a, #e8821c);
-      border-radius:50%; box-shadow:2px 6px 14px rgba(0,0,0,.18), inset -3px -3px 8px rgba(180,80,10,.18);
-      z-index:2; }
-    /* 귀 */
-    .cat-ear { position:absolute; top:-14px;
-      width:0; height:0;
-      border-left:12px solid transparent; border-right:12px solid transparent;
-      border-bottom:20px solid #e8821c; }
-    .cat-ear::after { content:''; position:absolute; top:5px; left:-7px;
-      width:0; height:0;
-      border-left:7px solid transparent; border-right:7px solid transparent;
-      border-bottom:13px solid #ffb5c8; }
-    .cat-ear.l { left:6px;  transform:rotate(-10deg); }
-    .cat-ear.r { left:28px; transform:rotate(10deg); }
-    /* 머리 줄무늬 */
-    .cat-hstripe { position:absolute; top:8px; background:rgba(190,90,10,.22); border-radius:50%; width:5px; height:15px; }
-    .cat-hstripe:nth-child(1){ left:21px; transform:rotate(-6deg); }
-    .cat-hstripe:nth-child(2){ left:27px; }
-    .cat-hstripe:nth-child(3){ left:33px; transform:rotate(6deg); }
-    /* 자는 눈 */
-    .cat-eye { position:absolute; top:26px;
-      width:14px; height:5px;
-      border-bottom:2.5px solid #7a3c10; border-radius:0 0 50% 50%; }
-    .cat-eye.l { left:10px; } .cat-eye.r { left:32px; }
-    /* 코 */
-    .cat-nose { position:absolute; top:33px; left:25px;
-      width:8px; height:6px;
-      background:#e8827a; border-radius:40% 40% 55% 55%; }
-    /* 볼터치 */
-    .cat-blush { position:absolute; top:36px;
-      width:16px; height:9px; background:rgba(255,120,100,.28); border-radius:50%; }
-    .cat-blush.l{ left:4px; } .cat-blush.r{ left:36px; }
-    /* 수염 */
-    .cat-wh { position:absolute; height:1.5px; background:rgba(100,50,10,.3); border-radius:2px; top:37px; }
-    .cat-wh:nth-child(1){ width:20px; left:-20px; transform:rotate(-6deg); }
-    .cat-wh:nth-child(2){ width:20px; left:-20px; transform:rotate(6deg);  top:42px; }
-    .cat-wh:nth-child(3){ width:20px; left:58px;  transform:rotate(6deg); }
-    .cat-wh:nth-child(4){ width:20px; left:58px;  transform:rotate(-6deg); top:42px; }
-
-    /* ZZZ */
-    .cat-zzz { position:absolute; top:-8px; left:10px; height:30px; }
-    .cat-z { position:absolute; font-weight:800; color:rgba(140,190,255,.9);
+    /* ── 치즈냥이 SVG ── */
+    .cat-scene { pointer-events:none; display:flex; flex-direction:column; align-items:center; position:relative; }
+    .cat-svg { animation:cat-breathe 3.4s ease-in-out infinite; transform-origin:50% 85%; overflow:visible; display:block; }
+    @keyframes cat-breathe { 0%,100%{transform:scaleY(1) scaleX(1)} 50%{transform:scaleY(1.05) scaleX(1.02)} }
+    .cat-zzz { position:relative; height:32px; width:56px; margin-bottom:4px; }
+    .cat-z { position:absolute; font-weight:900; color:rgba(130,185,255,.92);
       text-shadow:0 2px 8px rgba(100,160,255,.4); font-family:'Segoe UI',sans-serif;
       animation:zzz-up 2.6s ease-in-out infinite; opacity:0; }
     .cat-z:nth-child(1){ font-size:11px; left:0;   animation-delay:0s; }
-    .cat-z:nth-child(2){ font-size:14px; left:11px; animation-delay:.8s; }
-    .cat-z:nth-child(3){ font-size:10px; left:24px; animation-delay:1.6s; }
+    .cat-z:nth-child(2){ font-size:14px; left:12px; animation-delay:.85s; }
+    .cat-z:nth-child(3){ font-size:10px; left:26px; animation-delay:1.7s; }
     @keyframes zzz-up {
-      0%  { opacity:0; transform:translateY(0)    scale(.8); }
+      0%  { opacity:0; transform:translateY(0)     scale(.8); }
       20% { opacity:1; }
-      80% { opacity:.6; }
-      100%{ opacity:0; transform:translateY(-26px) scale(1.1); }
+      80% { opacity:.65; }
+      100%{ opacity:0; transform:translateY(-28px) scale(1.1); }
     }
-
-    /* 바닥 그림자 */
-    .cat-shadow { width:114px; height:13px;
-      background:radial-gradient(ellipse at center, rgba(0,0,0,.2) 0%, transparent 70%);
-      border-radius:50%; margin-top:3px;
-      animation:cat-shadow 3.4s ease-in-out infinite; }
-    @keyframes cat-shadow {
-      0%,100%{ transform:scaleX(1);    opacity:.65; }
-      50%    { transform:scaleX(1.04); opacity:.5; }
-    }
+    .cat-floor { width:130px; height:11px; margin-top:1px;
+      background:radial-gradient(ellipse at center, rgba(0,0,0,.18) 0%, transparent 70%);
+      border-radius:50%; animation:cat-shadow 3.4s ease-in-out infinite; }
+    @keyframes cat-shadow { 0%,100%{transform:scaleX(1);opacity:.65} 50%{transform:scaleX(1.05);opacity:.5} }
     #lock-input { padding: 9px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; outline: none; width: 190px; }
     #lock-input:focus { border-color: var(--blue); }
     #lock-btn { padding: 9px 18px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
@@ -865,30 +774,95 @@
         <span class="cat-z">z</span>
         <span class="cat-z">z</span>
       </div>
-      <div class="cat-wrap">
-        <div class="cat-body">
-          <div class="cat-belly"></div>
-        </div>
-        <div class="cat-paw"></div>
-        <div class="cat-tail"></div>
-        <div class="cat-head">
-          <div class="cat-ear l"></div>
-          <div class="cat-ear r"></div>
-          <div class="cat-hstripe"></div>
-          <div class="cat-hstripe"></div>
-          <div class="cat-hstripe"></div>
-          <div class="cat-eye l"></div>
-          <div class="cat-eye r"></div>
-          <div class="cat-nose"></div>
-          <div class="cat-blush l"></div>
-          <div class="cat-blush r"></div>
-          <div class="cat-wh"></div>
-          <div class="cat-wh"></div>
-          <div class="cat-wh"></div>
-          <div class="cat-wh"></div>
-        </div>
-      </div>
-      <div class="cat-shadow"></div>
+      <svg class="cat-svg" viewBox="0 0 165 102" width="165" height="102">
+        <defs>
+          <radialGradient id="rg-fur" cx="35%" cy="28%" r="62%">
+            <stop offset="0%"   stop-color="#FDD888"/>
+            <stop offset="52%"  stop-color="#F4A030"/>
+            <stop offset="100%" stop-color="#C86C0E"/>
+          </radialGradient>
+          <radialGradient id="rg-head" cx="38%" cy="30%" r="60%">
+            <stop offset="0%"   stop-color="#FDD888"/>
+            <stop offset="50%"  stop-color="#F4A030"/>
+            <stop offset="100%" stop-color="#C86C0E"/>
+          </radialGradient>
+          <radialGradient id="rg-belly" cx="44%" cy="38%" r="55%">
+            <stop offset="0%"   stop-color="#FFFDF2"/>
+            <stop offset="100%" stop-color="#FEECC4"/>
+          </radialGradient>
+          <radialGradient id="rg-ear" cx="50%" cy="80%" r="65%">
+            <stop offset="0%"   stop-color="#F4A030"/>
+            <stop offset="100%" stop-color="#C86C0E"/>
+          </radialGradient>
+          <filter id="fs" x="-15%" y="-15%" width="135%" height="135%">
+            <feDropShadow dx="2" dy="4" stdDeviation="3.5" flood-color="#0000002a"/>
+          </filter>
+          <filter id="fs2" x="-15%" y="-15%" width="135%" height="135%">
+            <feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="#00000020"/>
+          </filter>
+        </defs>
+
+        <!-- 꼬리 (뒤에 그림) -->
+        <path d="M 140 65 C 156 55 165 38 157 24 C 150 13 133 16 128 30 C 136 34 140 50 134 65 Z"
+              fill="url(#rg-fur)" stroke="#A85A08" stroke-width="0.8" opacity="0.95"/>
+        <!-- 꼬리 끝 하이라이트 -->
+        <ellipse cx="146" cy="22" rx="7" ry="6" fill="#FDD888" opacity="0.5" transform="rotate(-20 146 22)"/>
+
+        <!-- 몸통 -->
+        <ellipse cx="100" cy="72" rx="54" ry="27" fill="url(#rg-fur)" filter="url(#fs)"/>
+        <!-- 배 -->
+        <ellipse cx="96" cy="75" rx="32" ry="17" fill="url(#rg-belly)"/>
+        <!-- 몸통 줄무늬 -->
+        <path d="M 108 47 Q 112 60 109 88" stroke="#A85A08" stroke-width="3.5" fill="none" stroke-linecap="round" opacity="0.25"/>
+        <path d="M 122 49 Q 127 62 123 90" stroke="#A85A08" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.22"/>
+
+        <!-- 앞발 -->
+        <ellipse cx="61" cy="87" rx="23" ry="12" fill="url(#rg-fur)" filter="url(#fs2)"/>
+        <ellipse cx="61" cy="85" rx="19" ry="8.5" fill="url(#rg-belly)"/>
+        <path d="M 53 85 Q 52 91 53 95" stroke="#A85A08" stroke-width="1.3" fill="none" stroke-linecap="round" opacity="0.28"/>
+        <path d="M 61 84 Q 60 91 61 96" stroke="#A85A08" stroke-width="1.3" fill="none" stroke-linecap="round" opacity="0.28"/>
+        <path d="M 69 85 Q 70 91 69 95" stroke="#A85A08" stroke-width="1.3" fill="none" stroke-linecap="round" opacity="0.28"/>
+
+        <!-- 귀 (머리 뒤) -->
+        <path d="M 19 42 L 26 14 L 46 32 Z" fill="url(#rg-ear)"/>
+        <path d="M 22 40 L 28 17 L 43 31 Z" fill="#FFB8C8"/>
+        <path d="M 46 36 L 55 10 L 72 29 Z" fill="url(#rg-ear)"/>
+        <path d="M 49 34 L 57 13 L 68 28 Z" fill="#FFB8C8"/>
+
+        <!-- 머리 -->
+        <ellipse cx="45" cy="54" rx="33" ry="31" fill="url(#rg-head)" filter="url(#fs)"/>
+        <!-- 머리 줄무늬 -->
+        <path d="M 30 26 Q 29 37 27 48" stroke="#A85A08" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.27"/>
+        <path d="M 41 23 Q 40 35 38 46" stroke="#A85A08" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.27"/>
+        <path d="M 52 24 Q 51 36 49 47" stroke="#A85A08" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.27"/>
+
+        <!-- 자는 눈 -->
+        <path d="M 27 53 Q 34 47 41 53" stroke="#4A2408" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+        <path d="M 48 51 Q 55 45 62 51" stroke="#4A2408" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+        <!-- 속눈썹 -->
+        <line x1="27" y1="53" x2="24" y2="49" stroke="#4A2408" stroke-width="1.6" stroke-linecap="round"/>
+        <line x1="41" y1="53" x2="44" y2="49" stroke="#4A2408" stroke-width="1.6" stroke-linecap="round"/>
+
+        <!-- 코 -->
+        <path d="M 41 62 L 45 62 L 43 65.5 Z" fill="#E87878"/>
+        <!-- 입 -->
+        <path d="M 43 65 Q 40 70 35 68" stroke="#C05848" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+        <path d="M 43 65 Q 46 70 51 68" stroke="#C05848" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+
+        <!-- 볼터치 -->
+        <ellipse cx="22" cy="64" rx="10" ry="6" fill="#FFB0A0" opacity="0.38"/>
+        <ellipse cx="66" cy="62" rx="10" ry="6" fill="#FFB0A0" opacity="0.38"/>
+
+        <!-- 수염 왼쪽 -->
+        <line x1="38" y1="63" x2="6"  y2="56" stroke="#8B6030" stroke-width="1.2" opacity="0.32" stroke-linecap="round"/>
+        <line x1="38" y1="65" x2="4"  y2="65" stroke="#8B6030" stroke-width="1.2" opacity="0.28" stroke-linecap="round"/>
+        <line x1="38" y1="67" x2="6"  y2="74" stroke="#8B6030" stroke-width="1.2" opacity="0.32" stroke-linecap="round"/>
+        <!-- 수염 오른쪽 -->
+        <line x1="48" y1="63" x2="80" y2="56" stroke="#8B6030" stroke-width="1.2" opacity="0.32" stroke-linecap="round"/>
+        <line x1="48" y1="65" x2="82" y2="65" stroke="#8B6030" stroke-width="1.2" opacity="0.28" stroke-linecap="round"/>
+        <line x1="48" y1="67" x2="80" y2="74" stroke="#8B6030" stroke-width="1.2" opacity="0.32" stroke-linecap="round"/>
+      </svg>
+      <div class="cat-floor"></div>
     </div>
 
     <!-- 잠금 카드 -->
