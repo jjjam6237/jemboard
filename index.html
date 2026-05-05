@@ -362,6 +362,56 @@
     #lock-panel { position: fixed; inset: 0; top: 50px; z-index: 400; display: flex; align-items: center; justify-content: center; pointer-events: none; }
     body:not(.locked) #lock-panel { display: none; }
     #lock-card { background: rgba(15,17,23,.9); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.1); border-radius: 20px; padding: 36px 40px; text-align: center; pointer-events: all; box-shadow: 0 24px 64px rgba(0,0,0,.6); min-width: 320px; }
+
+    /* ── 인사하는 캐릭터 ── */
+    .jc-scene { pointer-events:none; display:flex; flex-direction:column; align-items:center; width:110px; }
+    .jc-full { transform-origin:50% 90%; animation:jc-bow 2.6s cubic-bezier(.4,0,.2,1) infinite; }
+    @keyframes jc-bow {
+      0%,18%   { transform:rotate(0deg); }
+      34%,66%  { transform:rotate(34deg); }
+      82%,100% { transform:rotate(0deg); }
+    }
+    /* 머리 */
+    .jc-head { width:62px; height:62px; border-radius:50%; background:radial-gradient(circle at 36% 30%, #fff4ec, #ffcaaa); box-shadow:3px 6px 14px rgba(0,0,0,.22),inset -3px -3px 8px rgba(180,80,40,.13); position:relative; margin:0 auto; }
+    /* 머리카락 */
+    .jc-hair { position:absolute; width:68px; height:36px; background:radial-gradient(circle at 50% 5%, #7a5030, #2c1508); border-radius:50% 50% 0 0/70% 70% 0 0; top:-5px; left:-3px; box-shadow:0 3px 8px rgba(0,0,0,.35); z-index:2; }
+    .jc-hair-l { position:absolute; width:13px; height:26px; background:#4a2c14; border-radius:40% 20% 50% 60%; top:16px; left:-6px; z-index:1; box-shadow:-1px 2px 5px rgba(0,0,0,.25); }
+    .jc-hair-r { position:absolute; width:13px; height:26px; background:#4a2c14; border-radius:20% 40% 60% 50%; top:16px; right:-6px; z-index:1; box-shadow:1px 2px 5px rgba(0,0,0,.25); }
+    /* 눈 */
+    .jc-eye { position:absolute; width:12px; height:15px; background:#18080a; border-radius:50%; top:25px; animation:jc-eye 2.6s cubic-bezier(.4,0,.2,1) infinite; }
+    .jc-eye::before { content:''; position:absolute; width:4px; height:4px; background:#fff; border-radius:50%; top:2px; left:2px; }
+    .jc-eye.l { left:13px; } .jc-eye.r { right:13px; }
+    @keyframes jc-eye {
+      0%,20%   { height:15px; top:25px; border-radius:50%; }
+      34%,64%  { height:3px; top:31px; border-radius:40% 40% 50% 50%; }
+      80%,100% { height:15px; top:25px; border-radius:50%; }
+    }
+    /* 볼터치 */
+    .jc-blush { position:absolute; width:16px; height:9px; background:rgba(255,130,110,.38); border-radius:50%; top:37px; }
+    .jc-blush.l { left:5px; } .jc-blush.r { right:5px; }
+    /* 입 */
+    .jc-mouth { position:absolute; width:18px; height:9px; border-bottom:3px solid #c86050; border-radius:0 0 50% 50%; left:50%; transform:translateX(-50%); top:39px; }
+    /* 목 */
+    .jc-neck { width:22px; height:9px; background:radial-gradient(#ffd4b8,#ffbfa0); margin:-2px auto 0; position:relative; z-index:1; }
+    /* 몸통 */
+    .jc-body { width:60px; height:60px; background:radial-gradient(circle at 32% 26%, #72c8f8, #2a7fd4); border-radius:30px 30px 24px 24px; margin:-3px auto 0; position:relative; box-shadow:3px 6px 14px rgba(0,0,0,.22),inset -4px -4px 10px rgba(0,0,0,.14),inset 3px 2px 8px rgba(255,255,255,.18); }
+    .jc-body::before { content:''; position:absolute; width:26px; height:17px; background:radial-gradient(circle at 42% 30%, #fff8f0, #ffd4b8); border-radius:50% 50% 0 0; top:0; left:50%; transform:translateX(-50%); }
+    /* 손 */
+    .jc-hands { position:absolute; width:48px; height:21px; background:radial-gradient(circle at 38% 35%, #ffe8d4, #ffbfa0); border-radius:24px; bottom:9px; left:50%; transform:translateX(-50%); box-shadow:0 3px 8px rgba(0,0,0,.2),inset 0 -2px 4px rgba(180,80,40,.1); }
+    .jc-hands::after { content:''; position:absolute; width:2px; height:15px; background:rgba(180,80,40,.18); border-radius:2px; top:3px; left:50%; transform:translateX(-50%); }
+    /* 다리 */
+    .jc-legs { display:flex; gap:8px; justify-content:center; margin-top:2px; }
+    .jc-leg { width:20px; height:28px; background:radial-gradient(circle at 35% 25%, #2a70b8, #0e3d7a); border-radius:10px 10px 5px 5px; box-shadow:1px 4px 7px rgba(0,0,0,.2); }
+    /* 발 */
+    .jc-feet { display:flex; gap:4px; justify-content:center; }
+    .jc-foot { width:26px; height:13px; background:radial-gradient(circle at 35% 35%, #5c4030, #2c180a); border-radius:7px 7px 10px 10px; box-shadow:0 4px 7px rgba(0,0,0,.28); }
+    /* 그림자 */
+    .jc-shadow { width:76px; height:13px; background:radial-gradient(ellipse at center, rgba(0,0,0,.3) 0%, transparent 70%); border-radius:50%; margin-top:5px; animation:jc-shadow 2.6s ease-in-out infinite; }
+    @keyframes jc-shadow {
+      0%,18%   { transform:scaleX(1); opacity:.7; }
+      34%,66%  { transform:scaleX(.6); opacity:.35; }
+      82%,100% { transform:scaleX(1); opacity:.7; }
+    }
     #lock-input { padding: 9px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; outline: none; width: 190px; }
     #lock-input:focus { border-color: var(--blue); }
     #lock-btn { padding: 9px 18px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
@@ -743,15 +793,49 @@
 
 <!-- Lock panel -->
 <div id="lock-panel">
-  <div id="lock-card">
-    <div style="font-size:44px;margin-bottom:14px;">🔒</div>
-    <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:8px;">포트폴리오 데이터 보호</div>
-    <div style="font-size:12px;color:#8b90a0;line-height:1.7;margin-bottom:22px;">실제 광고 데이터가 포함되어 있습니다.<br>비밀번호를 입력하면 전체 데이터를 볼 수 있습니다.</div>
-    <div style="display:flex;gap:8px;justify-content:center;">
-      <input type="password" id="lock-input" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter')Lock.unlock()">
-      <button id="lock-btn" onclick="Lock.unlock()">확인</button>
+  <div style="display:flex;align-items:flex-end;gap:20px;">
+
+    <!-- 인사하는 캐릭터 -->
+    <div class="jc-scene" aria-hidden="true">
+      <div class="jc-full">
+        <div class="jc-head">
+          <div class="jc-hair"></div>
+          <div class="jc-hair-l"></div>
+          <div class="jc-hair-r"></div>
+          <div class="jc-eye l"></div>
+          <div class="jc-eye r"></div>
+          <div class="jc-blush l"></div>
+          <div class="jc-blush r"></div>
+          <div class="jc-mouth"></div>
+        </div>
+        <div class="jc-neck"></div>
+        <div class="jc-body">
+          <div class="jc-hands"></div>
+        </div>
+        <div class="jc-legs">
+          <div class="jc-leg"></div>
+          <div class="jc-leg"></div>
+        </div>
+        <div class="jc-feet">
+          <div class="jc-foot"></div>
+          <div class="jc-foot"></div>
+        </div>
+      </div>
+      <div class="jc-shadow"></div>
     </div>
-    <div id="lock-error" style="color:#e74c3c;font-size:12px;margin-top:10px;min-height:16px;"></div>
+
+    <!-- 잠금 카드 -->
+    <div id="lock-card">
+      <div style="font-size:44px;margin-bottom:14px;">🔒</div>
+      <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:8px;">포트폴리오 데이터 보호</div>
+      <div style="font-size:12px;color:#8b90a0;line-height:1.7;margin-bottom:22px;">실제 광고 데이터가 포함되어 있습니다.<br>비밀번호를 입력하면 전체 데이터를 볼 수 있습니다.</div>
+      <div style="display:flex;gap:8px;justify-content:center;">
+        <input type="password" id="lock-input" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter')Lock.unlock()">
+        <button id="lock-btn" onclick="Lock.unlock()">확인</button>
+      </div>
+      <div id="lock-error" style="color:#e74c3c;font-size:12px;margin-top:10px;min-height:16px;"></div>
+    </div>
+
   </div>
 </div>
 
