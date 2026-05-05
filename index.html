@@ -3296,34 +3296,35 @@ async function trackPageView() {
 }
 
 async function fetchSourceStats() {
-  const ns = 'jemboard-jjjam6237';
-  const sources = Object.keys(SOURCE_LABELS);
   const listEl = document.getElementById('view-stats-list');
   if (!listEl) return;
   listEl.innerHTML = '<div style="color:var(--muted);font-size:11px;">불러오는 중...</div>';
 
-  const proxy = 'https://corsproxy.io/?';
-  const results = await Promise.all(
-    sources.map(src => {
-      const url = proxy + encodeURIComponent(`https://api.counterapi.dev/v1/${ns}-${src}/visits/`);
-      return fetch(url)
-        .then(r => r.ok ? r.json() : { count: 0 })
-        .then(d => ({ src, count: d.count || 0 }))
-        .catch(() => ({ src, count: 0 }));
-    })
-  );
+  try {
+    const res = await fetch(
+      `https://raw.githubusercontent.com/jjjam6237/jemboard/main/visitor_stats.json?t=${Date.now()}`
+    );
+    if (!res.ok) throw new Error();
+    const stats = await res.json();
 
-  const rows = results.filter(r => r.count > 0).sort((a, b) => b.count - a.count);
-  if (!rows.length) {
-    listEl.innerHTML = '<div style="color:var(--muted);font-size:11px;">아직 출처별 데이터 없음</div>';
-    return;
+    const rows = Object.keys(SOURCE_LABELS)
+      .map(src => ({ src, count: stats[src] || 0 }))
+      .filter(r => r.count > 0)
+      .sort((a, b) => b.count - a.count);
+
+    if (!rows.length) {
+      listEl.innerHTML = '<div style="color:var(--muted);font-size:11px;">아직 출처별 데이터 없음</div>';
+      return;
+    }
+    listEl.innerHTML = rows.map(r =>
+      `<div style="display:flex;justify-content:space-between;gap:24px;font-size:12px;padding:2px 0;color:var(--text);">
+        <span>${SOURCE_LABELS[r.src] || r.src}</span>
+        <span style="color:var(--accent);font-weight:600;">${Number(r.count).toLocaleString()}</span>
+      </div>`
+    ).join('');
+  } catch(e) {
+    listEl.innerHTML = '<div style="color:var(--muted);font-size:11px;">통계를 불러올 수 없음</div>';
   }
-  listEl.innerHTML = rows.map(r =>
-    `<div style="display:flex;justify-content:space-between;gap:24px;font-size:12px;padding:2px 0;color:var(--text);">
-      <span>${SOURCE_LABELS[r.src] || r.src}</span>
-      <span style="color:var(--accent);font-weight:600;">${Number(r.count).toLocaleString()}</span>
-    </div>`
-  ).join('');
 }
 
 initDashboard();
