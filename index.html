@@ -394,6 +394,7 @@
 
 <header class="header">
   <div class="logo">🎯 잼시보드<small id="fname" style="display:none;"></small></div>
+  <span id="view-count" style="font-size:11px;color:var(--muted);margin-left:2px;"></span>
   <button id="btn-lock" onclick="Lock.lock()" title="데이터 잠금" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;display:none;" title="잠금">🔓</button>
   <div class="tab-bar">
     <button class="tab-btn active" id="tab-campaign" onclick="switchTab('campaign')">📊 캠페인 개요</button>
@@ -3243,8 +3244,19 @@ async function initDashboard() {
   }
 }
 
+async function trackPageView() {
+  try {
+    const res = await fetch('https://api.counterapi.dev/v1/jemboard-jjjam6237/visits/up');
+    if (!res.ok) return;
+    const { count } = await res.json();
+    const el = document.getElementById('view-count');
+    if (el && count) el.textContent = '👁 ' + Number(count).toLocaleString() + ' views';
+  } catch(e) { /* silent fail */ }
+}
+
 initDashboard();
 Lock.init();
+trackPageView();
 </script>
 </body>
 </html>
