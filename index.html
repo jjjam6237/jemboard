@@ -262,6 +262,7 @@
     <span class="file-name" id="saved-info" style="color:var(--green);"></span>
     <button class="btn btn-secondary btn-sm" onclick="Store.exportCSV()">⬇ CSV</button>
     <button class="btn btn-secondary btn-sm hidden" id="btn-reset" onclick="JBStorage.clearAll()" style="color:var(--red);">× 초기화</button>
+    <button class="btn btn-secondary btn-sm hidden" id="btn-deploy" onclick="Deployer.open()" style="color:#a78bfa;border-color:#7c3aed33;">🚀 배포하기</button>
     <button class="btn btn-primary btn-sm" onclick="UI.showUpload()">📁 리포트 업로드</button>
   </div>
   <div class="header-right hidden" id="hdr-keyword">
@@ -502,6 +503,34 @@
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="UI.hideUpload()">취소</button>
       <button class="btn btn-primary" onclick="document.getElementById('f-file').click()">파일 선택</button>
+    </div>
+  </div>
+</div>
+
+<!-- Deploy modal -->
+<div id="m-deploy" class="overlay hidden" onclick="if(event.target===this)Deployer.close()">
+  <div class="modal" style="width:400px;">
+    <div class="modal-title">🚀 GitHub에 배포하기</div>
+    <div class="info-box" style="margin-bottom:12px;">
+      배포하면 <strong>모든 방문자</strong>가 이 데이터를 볼 수 있습니다.<br>
+      캠페인 데이터와 키워드 데이터(있을 경우)가 함께 배포됩니다.
+    </div>
+    <div id="deploy-pat-section">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">GitHub Personal Access Token</div>
+      <input id="deploy-pat-input" type="password" class="f-input" style="width:100%;font-size:13px;padding:8px 10px;"
+        placeholder="ghp_..." autocomplete="off">
+      <div style="display:flex;align-items:center;gap:6px;margin-top:8px;">
+        <input type="checkbox" id="deploy-remember" checked style="accent-color:var(--blue);">
+        <label for="deploy-remember" style="font-size:12px;color:var(--muted);cursor:pointer;">이 기기에 토큰 저장 (다음 배포 시 생략)</label>
+      </div>
+    </div>
+    <div id="deploy-progress" class="hidden" style="padding:12px 0;text-align:center;font-size:13px;color:var(--muted);">
+      <div class="spinner" style="margin:0 auto 8px;"></div>
+      <span id="deploy-progress-text">배포 준비 중...</span>
+    </div>
+    <div class="modal-actions" id="deploy-actions">
+      <button class="btn btn-secondary" onclick="Deployer.close()">취소</button>
+      <button class="btn btn-primary" onclick="Deployer.deploy()" style="background:#7c3aed;">🚀 배포 시작</button>
     </div>
   </div>
 </div>
@@ -782,6 +811,7 @@ const Parser = {
           UI.hideLoading();
           UI.render();
           JBStorage.saveCampaign(file.name, rows);
+          document.getElementById('btn-deploy').classList.remove('hidden');
         } catch(err) {
           UI.hideLoading();
           alert('파일 파싱 오류: ' + err.message);
@@ -1568,6 +1598,23 @@ const KWStore = {
     this.applyFilter();
   },
 
+  // 배포된 데이터(이미 집계된 rows 배열) 로드
+  loadAggregated(rows, dateFrom, dateTo) {
+    this._isAggregated = true;
+    this.raw = rows;
+    this.filtered = [...rows];
+    this.allDates = [];
+    this.dateFrom = dateFrom || null;
+    this.dateTo   = dateTo   || null;
+    this.medias  = [...new Set(rows.map(r=>r.media))].sort();
+    this.routes  = [...new Set(rows.map(r=>r.route).filter(Boolean))].sort();
+    this.devices = [...new Set(rows.map(r=>r.device).filter(Boolean))].sort();
+    this.activeMedias  = [...this.medias];
+    this.activeRoutes  = [...this.routes];
+    this.activeDevices = [...this.devices];
+    this.applyFilter();
+  },
+
   _agg(r) {
     const tot = {impr:0, clicks:0, cost:0, conv:0, revenue:0};
     Object.entries(r.daily||{}).forEach(([d,v]) => {
@@ -1591,7 +1638,7 @@ const KWStore = {
         this.activeDevices.includes(r.device) &&
         (!q || r.keyword.toLowerCase().includes(q))
       )
-      .map(r => this._agg(r))
+      .map(r => this._isAggregated ? r : this._agg(r))
       .filter(r => r.impr > 0 || r.cost > 0);
     this.filtered.sort((a,b) => {
       const av = a[this.sortKey]||0, bv = b[this.sortKey]||0;
@@ -1680,6 +1727,7 @@ const KWParser = {
           UI.hideLoading();
           KWUI.render();
           JBStorage.saveKeyword(file.name, kwMap);
+          document.getElementById('btn-deploy').classList.remove('hidden');
         } catch(err) {
           UI.hideLoading();
           alert('파싱 오류: ' + err.message);
@@ -1988,7 +2036,177 @@ const JBStorage = {
   },
 };
 
-JBStorage.restoreAll();
+// ── GitHub 배포 ────────────────────────────────────────────────────────────────
+const Deployer = {
+  OWNER: 'jm1403818-glitch',
+  REPO:  'jemboard',
+  PAT_KEY: 'jb_admin_pat',
+
+  open() {
+    const stored = localStorage.getItem(this.PAT_KEY);
+    const input = document.getElementById('deploy-pat-input');
+    if (stored) input.value = stored;
+    document.getElementById('m-deploy').classList.remove('hidden');
+    document.getElementById('deploy-progress').classList.add('hidden');
+    document.getElementById('deploy-actions').classList.remove('hidden');
+    document.getElementById('deploy-pat-section').classList.remove('hidden');
+  },
+
+  close() { document.getElementById('m-deploy').classList.add('hidden'); },
+
+  async deploy() {
+    const pat = document.getElementById('deploy-pat-input').value.trim();
+    if (!pat) { alert('토큰을 입력해주세요.'); return; }
+    if (document.getElementById('deploy-remember').checked) {
+      localStorage.setItem(this.PAT_KEY, pat);
+    }
+
+    document.getElementById('deploy-actions').classList.add('hidden');
+    document.getElementById('deploy-pat-section').classList.add('hidden');
+    document.getElementById('deploy-progress').classList.remove('hidden');
+    const setMsg = t => { document.getElementById('deploy-progress-text').textContent = t; };
+
+    try {
+      const files = [];
+
+      // 캠페인 데이터
+      if (Store.rows?.length) {
+        setMsg('캠페인 데이터 준비 중...');
+        const fname = document.getElementById('fname').textContent.replace(/^ — /, '').trim();
+        files.push({
+          path: 'data.json',
+          content: JSON.stringify({ fileName: fname, updatedAt: new Date().toISOString(), rows: Store.rows })
+        });
+      }
+
+      // 키워드 데이터 (현재 기간으로 집계)
+      if (KWStore.raw?.length) {
+        setMsg('키워드 데이터 준비 중...');
+        const kwRows = KWStore.raw
+          .map(r => KWStore._agg(r))
+          .filter(r => r.impr > 0 || r.cost > 0);
+        files.push({
+          path: 'kw_data.json',
+          content: JSON.stringify({ dateFrom: KWStore.dateFrom, dateTo: KWStore.dateTo, rows: kwRows })
+        });
+      }
+
+      if (!files.length) { alert('배포할 데이터가 없습니다.'); this.close(); return; }
+
+      setMsg('GitHub에 연결 중...');
+      await this._gitPush(pat, files, setMsg);
+
+      setMsg('배포 완료!');
+      setTimeout(() => {
+        this.close();
+        alert('배포 완료! 1~2분 후 URL에 반영됩니다.\nhttps://' + this.OWNER + '.github.io/' + this.REPO + '/');
+      }, 800);
+    } catch(err) {
+      document.getElementById('deploy-actions').classList.remove('hidden');
+      document.getElementById('deploy-pat-section').classList.remove('hidden');
+      document.getElementById('deploy-progress').classList.add('hidden');
+      alert('배포 실패: ' + err.message + '\n토큰 권한(repo)을 확인해주세요.');
+    }
+  },
+
+  async _gitPush(pat, files, setMsg) {
+    const base = `https://api.github.com/repos/${this.OWNER}/${this.REPO}`;
+    const h = { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' };
+
+    // 1. blob 생성
+    setMsg('데이터 업로드 중...');
+    const blobs = await Promise.all(files.map(async f => {
+      const res = await fetch(`${base}/git/blobs`, { method:'POST', headers:h,
+        body: JSON.stringify({ content: f.content, encoding: 'utf-8' }) });
+      if (!res.ok) throw new Error('blob 생성 실패: ' + res.status);
+      const d = await res.json();
+      return { path: f.path, sha: d.sha, mode: '100644', type: 'blob' };
+    }));
+
+    // 2. 현재 커밋 SHA
+    const refRes = await fetch(`${base}/git/refs/heads/main`, { headers: h });
+    if (!refRes.ok) throw new Error('브랜치 정보 조회 실패: ' + refRes.status);
+    const refData = await refRes.json();
+    const commitSha = refData.object.sha;
+
+    // 3. 트리 SHA
+    const commitRes = await fetch(`${base}/git/commits/${commitSha}`, { headers: h });
+    const commitData = await commitRes.json();
+
+    // 4. 새 트리
+    setMsg('커밋 생성 중...');
+    const treeRes = await fetch(`${base}/git/trees`, { method:'POST', headers:h,
+      body: JSON.stringify({ base_tree: commitData.tree.sha, tree: blobs }) });
+    if (!treeRes.ok) throw new Error('트리 생성 실패: ' + treeRes.status);
+    const treeData = await treeRes.json();
+
+    // 5. 커밋
+    const newCommitRes = await fetch(`${base}/git/commits`, { method:'POST', headers:h,
+      body: JSON.stringify({ message: `데이터 업데이트: ${new Date().toLocaleString('ko-KR')}`, tree: treeData.sha, parents: [commitSha] }) });
+    if (!newCommitRes.ok) throw new Error('커밋 생성 실패: ' + newCommitRes.status);
+    const newCommitData = await newCommitRes.json();
+
+    // 6. ref 업데이트
+    const updateRes = await fetch(`${base}/git/refs/heads/main`, { method:'PATCH', headers:h,
+      body: JSON.stringify({ sha: newCommitData.sha }) });
+    if (!updateRes.ok) throw new Error('브랜치 업데이트 실패: ' + updateRes.status);
+  },
+};
+
+// ── 초기 데이터 로드 (GitHub → localStorage 순) ────────────────────────────────
+async function initDashboard() {
+  const RAW = `https://raw.githubusercontent.com/${Deployer.OWNER}/${Deployer.REPO}/main`;
+  let campaignLoaded = false, kwLoaded = false;
+
+  // 1. GitHub에서 캠페인 데이터
+  try {
+    const res = await fetch(`${RAW}/data.json?t=${Date.now()}`);
+    if (res.ok) {
+      const { fileName, updatedAt, rows } = await res.json();
+      if (rows?.length) {
+        Store.load(rows);
+        document.getElementById('fname').textContent = ' — ' + fileName;
+        const d = new Date(updatedAt);
+        document.getElementById('data-range').textContent =
+          `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()} 배포`;
+        UI.render();
+        campaignLoaded = true;
+      }
+    }
+  } catch(e) {}
+
+  // 2. GitHub에서 키워드 데이터
+  try {
+    const res = await fetch(`${RAW}/kw_data.json?t=${Date.now()}`);
+    if (res.ok) {
+      const { dateFrom, dateTo, rows } = await res.json();
+      if (rows?.length) {
+        KWStore.loadAggregated(rows, dateFrom, dateTo);
+        KWUI.render();
+        kwLoaded = true;
+      }
+    }
+  } catch(e) {}
+
+  // 3. 없으면 localStorage 폴백 (관리자 로컬용)
+  if (!campaignLoaded) {
+    const c = JBStorage.loadCampaign();
+    if (c?.rows?.length) {
+      Store.load(c.rows);
+      document.getElementById('fname').textContent = ' — ' + c.fileName;
+      UI.render();
+      JBStorage._showSaved(c.fileName);
+      document.getElementById('btn-deploy').classList.remove('hidden');
+      campaignLoaded = true;
+    }
+  }
+  if (!kwLoaded) {
+    const k = await JBStorage.loadKeyword();
+    if (k?.kwMap) { KWStore.load(k.kwMap); KWUI.render(); }
+  }
+}
+
+initDashboard();
 </script>
 </body>
 </html>
