@@ -578,12 +578,7 @@
           <span id="kw-conv-count" style="font-size:11px;color:#9ca3af;font-weight:400;"></span>
         </div>
         <div id="kw-conv-summary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;"></div>
-        <div class="kw-table-wrap">
-          <table class="kw-table">
-            <thead id="kw-conv-thead"></thead>
-            <tbody id="kw-conv-tbody"></tbody>
-          </table>
-        </div>
+        <div id="kw-conv-media-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;"></div>
       </div>
 
       <!-- 성과 등급 -->
@@ -2308,6 +2303,7 @@ const KWUI = {
       KWStore.activeRoutes  = MS.getSelected('ms-kw-route');
       KWStore.activeDevices = MS.getSelected('ms-kw-device');
       KWStore.applyFilter();
+      this._convShowCount = {};
       this.renderKPIs(); this.renderConvKeywords(); this.renderGrade(); KWCh.renderAll(); this.renderTable();
     };
     const MDOTS = { '네이버':'#03c75a','구글':'#4285f4','카카오':'#f7c600','당근':'#ff6f00' };
@@ -2436,86 +2432,123 @@ const KWUI = {
 
   search(q) { KWStore.search = q; KWStore.applyFilter(); this.renderKPIs(); this.renderGrade(); KWCh.renderAll(); this.renderTable(); },
 
+  _convShowCount: {},
+  _convAllRows: {},
+
   renderConvKeywords() {
     const card = document.getElementById('kw-conv-card');
-
-    // 집계 데이터(배포본)이거나 일별 데이터 없으면 숨김
     if (KWStore._isAggregated || !KWStore.allDates.length) { card.classList.add('hidden'); return; }
 
     const maxDate = KWStore.allDates[KWStore.allDates.length - 1];
-    const rows = [];
+    const allRows = [];
     KWStore.raw.forEach(r => {
       const d = r.daily?.[maxDate];
       if (!d || d.conv <= 0) return;
-      rows.push({
+      allRows.push({
         keyword: r.keyword, media: r.media, route: r.route, device: r.device,
         impr: d.impr, clicks: d.clicks, cost: d.cost, conv: d.conv, revenue: d.revenue,
-        ctr:  d.impr   > 0 ? d.clicks/d.impr*100   : 0,
-        cpc:  d.clicks > 0 ? d.cost/d.clicks        : 0,
-        cpa:  d.conv   > 0 ? d.cost/d.conv          : 0,
-        roas: d.cost   > 0 ? d.revenue/d.cost       : 0,
+        ctr:  d.impr>0   ? d.clicks/d.impr*100 : 0,
+        cpa:  d.conv>0   ? d.cost/d.conv       : 0,
+        roas: d.cost>0   ? d.revenue/d.cost    : 0,
       });
     });
-    rows.sort((a, b) => b.conv - a.conv);
-
-    if (!rows.length) { card.classList.add('hidden'); return; }
+    allRows.sort((a, b) => b.conv - a.conv);
+    if (!allRows.length) { card.classList.add('hidden'); return; }
     card.classList.remove('hidden');
 
-    // 날짜 헤더
-    document.getElementById('kw-conv-title').innerHTML =
-      `⚡ 전일 전환 키워드 <span style="font-size:11px;color:#9ca3af;font-weight:400;margin-left:6px;">${maxDate} 기준</span>`;
-    document.getElementById('kw-conv-count').textContent = `총 ${rows.length}개 키워드`;
+    // 매체별 분류 (네이버/구글 우선, 나머지 추가)
+    const MEDIA_ORDER = ['네이버','구글','카카오','당근'];
+    const mediaGroups = {};
+    allRows.forEach(r => {
+      if (!mediaGroups[r.media]) mediaGroups[r.media] = [];
+      mediaGroups[r.media].push(r);
+    });
+    const activeMedia = MEDIA_ORDER.filter(m => mediaGroups[m]?.length);
+    this._convAllRows = mediaGroups;
+
+    // showCount 초기화 (없는 매체만)
+    activeMedia.forEach(m => { if (!this._convShowCount[m]) this._convShowCount[m] = 10; });
 
     // 요약 KPI
-    const tot = rows.reduce((a,r)=>({ conv:a.conv+r.conv, cost:a.cost+r.cost, revenue:a.revenue+r.revenue, clicks:a.clicks+r.clicks }), {conv:0,cost:0,revenue:0,clicks:0});
-    const avgRoas = tot.cost > 0 ? tot.revenue/tot.cost : 0;
-    const avgCpa  = tot.conv  > 0 ? tot.cost/tot.conv   : 0;
+    const tot = allRows.reduce((a,r)=>({ conv:a.conv+r.conv, cost:a.cost+r.cost, revenue:a.revenue+r.revenue }), {conv:0,cost:0,revenue:0});
     const fw = (v, unit) => {
+      const n = Math.round(v);
       if (unit==='₩') {
-        const n=Math.round(v);
         if(n>=10000000) return '₩'+(n/10000000).toFixed(1)+'천만';
         if(n>=10000)    return '₩'+(n/10000).toFixed(0)+'만';
         return '₩'+n.toLocaleString();
       }
       if (unit==='x') return v.toFixed(2)+'x';
-      return Math.round(v).toLocaleString();
+      return n.toLocaleString();
     };
+    document.getElementById('kw-conv-title').innerHTML =
+      `⚡ 전일 전환 키워드 <span style="font-size:11px;color:#9ca3af;font-weight:400;margin-left:6px;">${maxDate} 기준</span>`;
+    document.getElementById('kw-conv-count').textContent = `총 ${allRows.length}개 키워드`;
     document.getElementById('kw-conv-summary').innerHTML = [
-      { label:'전환 키워드 수', value: rows.length+'개', sub:'' },
-      { label:'총 전환수',      value: fw(tot.conv,''),  sub:'' },
-      { label:'평균 CPA',       value: fw(avgCpa,'₩'),   sub:'' },
-      { label:'평균 ROAS',      value: fw(avgRoas,'x'),  sub:'' },
-    ].map(k=>`<div class="conv-kpi">
-      <div class="conv-kpi-label">${k.label}</div>
-      <div class="conv-kpi-value">${k.value}</div>
-    </div>`).join('');
+      { label:'전환 키워드 수', value: allRows.length+'개' },
+      { label:'총 전환수',      value: fw(tot.conv,'') },
+      { label:'평균 CPA',       value: fw(tot.conv>0?tot.cost/tot.conv:0,'₩') },
+      { label:'평균 ROAS',      value: fw(tot.cost>0?tot.revenue/tot.cost:0,'x') },
+    ].map(k=>`<div class="conv-kpi"><div class="conv-kpi-label">${k.label}</div><div class="conv-kpi-value">${k.value}</div></div>`).join('');
 
-    // 테이블
-    const mediaCls = { '네이버':'naver','구글':'google','카카오':'kakao','당근':'daangn' };
-    document.getElementById('kw-conv-thead').innerHTML = `<tr>
-      <th style="text-align:left;">키워드</th>
-      <th style="text-align:left;">매체</th>
-      <th style="text-align:left;">노선</th>
-      <th style="text-align:left;">디바이스</th>
-      <th>전환수</th><th>CPA</th><th>ROAS</th>
-      <th>광고비</th><th>클릭수</th><th>CTR</th><th>노출수</th>
-    </tr>`;
-    document.getElementById('kw-conv-tbody').innerHTML = rows.map(r => {
-      const kw=r.keyword.replace(/'/g,"\\'"), rt=(r.route||'').replace(/'/g,"\\'");
+    // 매체별 컬럼 렌더
+    const cols = Math.min(activeMedia.length, 2);
+    document.getElementById('kw-conv-media-grid').style.gridTemplateColumns = `repeat(${cols},1fr)`;
+    document.getElementById('kw-conv-media-grid').innerHTML = activeMedia.map(media =>
+      this._renderConvMediaCol(media, mediaGroups[media])
+    ).join('');
+  },
+
+  _renderConvMediaCol(media, rows) {
+    const MEDIA_COLOR = { '네이버':'#03c75a','구글':'#4285f4','카카오':'#f7c600','당근':'#ff6f00' };
+    const mediaCls   = { '네이버':'naver','구글':'google','카카오':'kakao','당근':'daangn' };
+    const count = this._convShowCount[media] || 10;
+    const visible = rows.slice(0, count);
+    const hasMore = rows.length > count;
+    const color = MEDIA_COLOR[media] || '#888';
+
+    const tableRows = visible.map(r => {
+      const kw = r.keyword.replace(/'/g,"\\'"), rt = (r.route||'').replace(/'/g,"\\'");
       return `<tr class="kw-row-click" onclick="KWUI.showTrend('${kw}','${r.media}','${rt}','${r.device}')">
-        <td style="font-weight:600;color:#1a1d2e;">${r.keyword}</td>
-        <td><span class="kw-media-tag ${mediaCls[r.media]||''}">${r.media}</span></td>
+        <td style="font-weight:600;color:#1a1d2e;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.keyword}</td>
         <td>${r.route||'-'}</td>
         <td>${r.device}</td>
         <td style="font-weight:700;color:#16a34a;">${Math.round(r.conv)}</td>
         <td>${r.cpa>0?'₩'+Math.round(r.cpa).toLocaleString():'-'}</td>
         <td>${r.roas>0?r.roas.toFixed(2)+'x':'-'}</td>
-        <td>₩${Math.round(r.cost).toLocaleString()}</td>
-        <td>${Math.round(r.clicks).toLocaleString()}</td>
-        <td>${r.ctr.toFixed(2)}%</td>
-        <td>${Math.round(r.impr).toLocaleString()}</td>
       </tr>`;
     }).join('');
+
+    return `<div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid ${color}20;">
+        <span class="kw-media-tag ${mediaCls[media]||''}" style="font-size:12px;padding:2px 10px;">${media}</span>
+        <span style="font-size:12px;font-weight:700;color:#374151;">${rows.length}개 키워드</span>
+      </div>
+      <div class="kw-table-wrap">
+        <table class="kw-table">
+          <thead><tr>
+            <th style="text-align:left;">키워드</th>
+            <th style="text-align:left;">노선</th>
+            <th style="text-align:left;">디바이스</th>
+            <th>전환</th><th>CPA</th><th>ROAS</th>
+          </tr></thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      </div>
+      ${hasMore ? `<div style="text-align:center;padding:10px 0 2px;">
+        <button class="btn btn-secondary btn-sm" onclick="KWUI.expandConv('${media}')">+ ${Math.min(10, rows.length-count)}개 더 보기</button>
+      </div>` : ''}
+    </div>`;
+  },
+
+  expandConv(media) {
+    this._convShowCount[media] = (this._convShowCount[media] || 10) + 10;
+    const rows = this._convAllRows[media] || [];
+    const col = document.getElementById('kw-conv-media-grid');
+    // 해당 매체 컬럼만 업데이트
+    const MEDIA_ORDER = ['네이버','구글','카카오','당근'];
+    const activeMedia = MEDIA_ORDER.filter(m => this._convAllRows[m]?.length);
+    col.innerHTML = activeMedia.map(m => this._renderConvMediaCol(m, this._convAllRows[m])).join('');
   },
 
   exportCSV() { KWStore.exportCSV(); },
