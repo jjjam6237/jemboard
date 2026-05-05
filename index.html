@@ -136,7 +136,10 @@
     .kw-kpi-value { font-size: 20px; font-weight: 700; color: #1a1d2e; margin-bottom: 4px; }
     .kw-kpi-sub { font-size: 11px; color: #9ca3af; }
 
-    .kw-content { padding: 20px; display: flex; flex-direction: column; gap: 18px; }
+    .kw-layout { display: grid; grid-template-columns: 200px 1fr; min-height: calc(100vh - 50px); }
+    .kw-sidebar { background: #ffffff; border-right: 1px solid #e2e6f0; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; }
+    body.kw-mode .sb-label { color: #6b7280; }
+    .kw-content { padding: 20px; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; }
     .kw-section-title { font-size: 13px; font-weight: 700; color: #374151; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
     .kw-charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .kw-chart-box { position: relative; height: 260px; }
@@ -439,19 +442,28 @@
   </div>
 
   <div id="kw-main" class="hidden">
-    <div class="kw-content">
+    <div class="kw-layout">
+
+      <!-- 사이드바 -->
+      <aside class="kw-sidebar">
+        <div class="sb-section">
+          <div class="sb-label">날짜 범위</div>
+          <div id="dp-keyword" class="dp-wrapper"></div>
+        </div>
+        <div class="sb-section">
+          <div class="sb-label">필터</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div id="ms-kw-media"  class="ms-wrap"></div>
+            <div id="ms-kw-route"  class="ms-wrap"></div>
+            <div id="ms-kw-device" class="ms-wrap"></div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- 콘텐츠 -->
+      <div class="kw-content">
       <!-- KPI -->
       <div id="kw-kpi-grid" class="kw-kpi-grid"></div>
-
-      <!-- 필터 -->
-      <div class="kw-card" style="padding:14px 18px;">
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-          <div id="dp-keyword"  class="dp-wrapper" style="min-width:220px;"></div>
-          <div id="ms-kw-media"  class="ms-wrap" style="min-width:130px;"></div>
-          <div id="ms-kw-route"  class="ms-wrap" style="min-width:130px;"></div>
-          <div id="ms-kw-device" class="ms-wrap" style="min-width:120px;"></div>
-        </div>
-      </div>
 
       <!-- 성과 등급 -->
       <div class="kw-card">
@@ -493,8 +505,9 @@
         </div>
         <div class="kw-pagination" id="kw-pagination"></div>
       </div>
-    </div>
-  </div>
+    </div><!-- /kw-content -->
+    </div><!-- /kw-layout -->
+  </div><!-- /kw-main -->
 </div><!-- /page-keyword -->
 
 <!-- 키워드 업로드 모달 -->
