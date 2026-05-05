@@ -365,11 +365,12 @@
 
     /* ── 인사하는 캐릭터 ── */
     .jc-scene { pointer-events:none; display:flex; flex-direction:column; align-items:center; width:110px; }
-    .jc-full { transform-origin:50% 90%; animation:jc-bow 2.6s cubic-bezier(.4,0,.2,1) infinite; }
+    .jc-full { /* wrapper only */ }
+    .jc-upper { transform-origin:50% 100%; animation:jc-bow 2.6s cubic-bezier(.4,0,.2,1) infinite; }
     @keyframes jc-bow {
-      0%,18%   { transform:rotate(0deg); }
-      34%,66%  { transform:rotate(34deg); }
-      82%,100% { transform:rotate(0deg); }
+      0%,18%   { transform:perspective(380px) rotateX(0deg); }
+      34%,66%  { transform:perspective(380px) rotateX(58deg); }
+      82%,100% { transform:perspective(380px) rotateX(0deg); }
     }
     /* 머리 */
     .jc-head { width:62px; height:62px; border-radius:50%; background:radial-gradient(circle at 36% 30%, #fff4ec, #ffcaaa); box-shadow:3px 6px 14px rgba(0,0,0,.22),inset -3px -3px 8px rgba(180,80,40,.13); position:relative; margin:0 auto; }
@@ -798,20 +799,24 @@
     <!-- 인사하는 캐릭터 -->
     <div class="jc-scene" aria-hidden="true">
       <div class="jc-full">
-        <div class="jc-head">
-          <div class="jc-hair"></div>
-          <div class="jc-hair-l"></div>
-          <div class="jc-hair-r"></div>
-          <div class="jc-eye l"></div>
-          <div class="jc-eye r"></div>
-          <div class="jc-blush l"></div>
-          <div class="jc-blush r"></div>
-          <div class="jc-mouth"></div>
+        <!-- 상체: 앞으로 꾸벅 -->
+        <div class="jc-upper">
+          <div class="jc-head">
+            <div class="jc-hair"></div>
+            <div class="jc-hair-l"></div>
+            <div class="jc-hair-r"></div>
+            <div class="jc-eye l"></div>
+            <div class="jc-eye r"></div>
+            <div class="jc-blush l"></div>
+            <div class="jc-blush r"></div>
+            <div class="jc-mouth"></div>
+          </div>
+          <div class="jc-neck"></div>
+          <div class="jc-body">
+            <div class="jc-hands"></div>
+          </div>
         </div>
-        <div class="jc-neck"></div>
-        <div class="jc-body">
-          <div class="jc-hands"></div>
-        </div>
+        <!-- 하체: 고정 -->
         <div class="jc-legs">
           <div class="jc-leg"></div>
           <div class="jc-leg"></div>
