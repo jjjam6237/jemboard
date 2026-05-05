@@ -247,12 +247,44 @@
     .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .loading-text { color: var(--text); font-size: 14px; }
+
+    /* ── 블러 잠금 ── */
+    body.locked .kpi-value,
+    body.locked .kpi-change,
+    body.locked #fname,
+    body.locked #data-range,
+    body.locked canvas,
+    body.locked td:not(:first-child),
+    body.locked .ins,
+    body.locked .ins-action,
+    body.locked .grade-num,
+    body.locked .kw-kpi-value,
+    body.locked .kw-kpi-sub,
+    body.locked .kw-table td { filter: blur(6px); user-select: none; pointer-events: none; transition: filter .3s; }
+    body:not(.locked) .kpi-value,
+    body:not(.locked) .kpi-change,
+    body:not(.locked) canvas,
+    body:not(.locked) td,
+    body:not(.locked) .ins,
+    body:not(.locked) .ins-action,
+    body:not(.locked) .grade-num,
+    body:not(.locked) .kw-kpi-value,
+    body:not(.locked) .kw-kpi-sub { filter: none; transition: filter .3s; }
+
+    #lock-panel { position: fixed; inset: 0; top: 50px; z-index: 400; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+    body:not(.locked) #lock-panel { display: none; }
+    #lock-card { background: rgba(15,17,23,.9); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.1); border-radius: 20px; padding: 36px 40px; text-align: center; pointer-events: all; box-shadow: 0 24px 64px rgba(0,0,0,.6); min-width: 320px; }
+    #lock-input { padding: 9px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; outline: none; width: 190px; }
+    #lock-input:focus { border-color: var(--blue); }
+    #lock-btn { padding: 9px 18px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    #lock-btn:hover { background: #3a8ef0; }
   </style>
 </head>
 <body>
 
 <header class="header">
   <div class="logo">🎯 잼시보드<small id="fname"></small></div>
+  <button id="btn-lock" onclick="Lock.lock()" title="데이터 잠금" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;display:none;" title="잠금">🔓</button>
   <div class="tab-bar">
     <button class="tab-btn active" id="tab-campaign" onclick="switchTab('campaign')">📊 캠페인 개요</button>
     <button class="tab-btn" id="tab-keyword" onclick="switchTab('keyword')">🔑 키워드 분석</button>
@@ -504,6 +536,20 @@
       <button class="btn btn-secondary" onclick="UI.hideUpload()">취소</button>
       <button class="btn btn-primary" onclick="document.getElementById('f-file').click()">파일 선택</button>
     </div>
+  </div>
+</div>
+
+<!-- Lock panel -->
+<div id="lock-panel">
+  <div id="lock-card">
+    <div style="font-size:44px;margin-bottom:14px;">🔒</div>
+    <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:8px;">포트폴리오 데이터 보호</div>
+    <div style="font-size:12px;color:#8b90a0;line-height:1.7;margin-bottom:22px;">실제 광고 데이터가 포함되어 있습니다.<br>비밀번호를 입력하면 전체 데이터를 볼 수 있습니다.</div>
+    <div style="display:flex;gap:8px;justify-content:center;">
+      <input type="password" id="lock-input" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter')Lock.unlock()">
+      <button id="lock-btn" onclick="Lock.unlock()">확인</button>
+    </div>
+    <div id="lock-error" style="color:#e74c3c;font-size:12px;margin-top:10px;min-height:16px;"></div>
   </div>
 </div>
 
@@ -2036,6 +2082,44 @@ const JBStorage = {
   },
 };
 
+// ── 블러 잠금 ──────────────────────────────────────────────────────────────────
+const Lock = {
+  _pw: 'dlwoals12',
+
+  init() {
+    if (sessionStorage.getItem('jb_unlocked') === '1') {
+      this._setUnlocked();
+    } else {
+      document.body.classList.add('locked');
+    }
+  },
+
+  unlock() {
+    const val = document.getElementById('lock-input').value;
+    if (val === this._pw) {
+      sessionStorage.setItem('jb_unlocked', '1');
+      this._setUnlocked();
+    } else {
+      document.getElementById('lock-error').textContent = '비밀번호가 틀렸습니다';
+      document.getElementById('lock-input').value = '';
+      document.getElementById('lock-input').focus();
+    }
+  },
+
+  lock() {
+    sessionStorage.removeItem('jb_unlocked');
+    document.body.classList.add('locked');
+    document.getElementById('btn-lock').style.display = 'none';
+    document.getElementById('lock-input').value = '';
+    document.getElementById('lock-error').textContent = '';
+  },
+
+  _setUnlocked() {
+    document.body.classList.remove('locked');
+    document.getElementById('btn-lock').style.display = 'block';
+  },
+};
+
 // ── GitHub 배포 ────────────────────────────────────────────────────────────────
 const Deployer = {
   OWNER: 'jjjam6237',
@@ -2207,6 +2291,7 @@ async function initDashboard() {
 }
 
 initDashboard();
+Lock.init();
 </script>
 </body>
 </html>
