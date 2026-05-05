@@ -271,6 +271,23 @@
     .pacing-proj { font-size: 11px; color: var(--muted); margin-top: 3px; }
     body.locked .pacing-detail { display: none; }
 
+    /* ── 비교 카드 ── */
+    .cmp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px,1fr)); gap: 10px; }
+    .cmp-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 12px; position: relative; overflow: hidden; }
+    .cmp-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+    .cmp-card.pos-card::before { background: var(--green); }
+    .cmp-card.neg-card::before { background: var(--red); }
+    .cmp-card.neu-card::before { background: var(--border); }
+    .cmp-label { font-size: 10px; color: var(--muted); font-weight: 700; letter-spacing: .5px; margin-bottom: 8px; text-transform: uppercase; }
+    .cmp-curr  { font-size: 17px; font-weight: 800; color: var(--text); line-height: 1.1; margin-bottom: 3px; }
+    .cmp-prev  { font-size: 11px; color: var(--muted); margin-bottom: 7px; }
+    .cmp-change { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 4px; }
+    .cmp-change.pos { color: var(--green); }
+    .cmp-change.neg { color: var(--red); }
+    .cmp-change.neu { color: var(--muted); }
+    .cmp-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+    .cmp-bar-fill { height: 100%; border-radius: 2px; transition: width .6s ease; }
+
     /* ── ③ 이상치 ── */
     .anomaly-tag { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; margin-left: 4px; display: inline-block; }
     .anomaly-up  { background: rgba(231,76,60,.15);  color: var(--red); }
@@ -396,6 +413,24 @@
         <button class="collapse-btn" onclick="UI.toggleCard('card-pacing')">−</button>
       </div>
       <div class="chart-body" id="pacing-body"></div>
+    </div>
+
+    <!-- 주차 비교 카드 -->
+    <div class="chart-card collapsible hidden" id="card-week-cmp">
+      <div class="card-title-row">
+        <div class="title-left" id="week-cmp-title">📅 주차별 성과 비교</div>
+        <button class="collapse-btn" onclick="UI.toggleCard('card-week-cmp')">−</button>
+      </div>
+      <div class="chart-body" id="week-cmp-body"></div>
+    </div>
+
+    <!-- 전월 비교 카드 -->
+    <div class="chart-card collapsible hidden" id="card-month-cmp">
+      <div class="card-title-row">
+        <div class="title-left" id="month-cmp-title">📆 전월 비교</div>
+        <button class="collapse-btn" onclick="UI.toggleCard('card-month-cmp')">−</button>
+      </div>
+      <div class="chart-body" id="month-cmp-body"></div>
     </div>
 
     <div class="charts-grid">
@@ -1287,6 +1322,8 @@ const UI = {
     this.renderSidebar();
     this.renderKPIs();
     this.renderPacing();
+    this.renderWeekCompare();
+    this.renderMonthCompare();
     this.loadTargets();
     this.renderTabs();
     CH.renderAll();
@@ -1318,6 +1355,8 @@ const UI = {
     Store.filter({ from, to, devices: MS.getSelected('ms-c-device'), medias: MS.getSelected('ms-c-media'), routes: MS.getSelected('ms-c-route') });
     this.renderKPIs();
     this.renderPacing();
+    this.renderWeekCompare();
+    this.renderMonthCompare();
     this.renderInsights();
     CH.renderAll();
     this.tableShowCount = 30;
@@ -1470,6 +1509,96 @@ const UI = {
         }).join('')}
       </div>
       <div class="pacing-detail" style="font-size:10px;color:var(--muted);text-align:right;margin-top:4px;">* ${activeDays}일 기준 예상 / ${monthLabel} 전체 ${daysInMonth}일</div>`;
+  },
+
+  _aggRange(from, to) {
+    const rows = Store.raw.filter(r => r.date >= from && r.date <= to);
+    const a = { cost:0, conv:0, revenue:0, impr:0, clicks:0 };
+    rows.forEach(r => { a.cost+=r.cost; a.conv+=r.conv; a.revenue+=r.revenue; a.impr+=r.impr; a.clicks+=r.clicks; });
+    a.roas = a.cost>0 ? a.revenue/a.cost : 0;
+    a.ctr  = a.impr>0 ? a.clicks/a.impr*100 : 0;
+    a.cpa  = a.conv>0 ? a.cost/a.conv : 0;
+    a.days = new Set(rows.map(r=>r.date)).size;
+    return a;
+  },
+
+  _renderCmpBody(id, curr, prev, prevLabel) {
+    const fv = (k, v) => {
+      const n = Math.round(v);
+      if (k==='roas') return v.toFixed(2)+'x';
+      if (k==='ctr')  return v.toFixed(2)+'%';
+      if (['cost','cpa','revenue'].includes(k)) {
+        if (n>=100000000) return '₩'+(n/100000000).toFixed(1)+'억';
+        if (n>=10000000)  return '₩'+(n/10000000).toFixed(1)+'천만';
+        if (n>=10000)     return '₩'+(n/10000).toFixed(0)+'만';
+        return '₩'+n.toLocaleString();
+      }
+      return n.toLocaleString();
+    };
+    const METS = [
+      {k:'cost',    lb:false, label:'광고비'},
+      {k:'impr',    lb:false, label:'노출수'},
+      {k:'clicks',  lb:false, label:'클릭수'},
+      {k:'conv',    lb:false, label:'전환수'},
+      {k:'revenue', lb:false, label:'전환매출'},
+      {k:'roas',    lb:false, label:'ROAS'},
+      {k:'ctr',     lb:false, label:'CTR'},
+      {k:'cpa',     lb:true,  label:'CPA'},
+    ];
+    document.getElementById(id).innerHTML = `<div class="cmp-grid">${METS.map(m=>{
+      const c=curr[m.k]||0, p=prev[m.k]||0;
+      const pct = p>0 ? (c-p)/p*100 : 0;
+      const good = m.lb ? pct<=0 : pct>=0;
+      const cls = Math.abs(pct)<0.5 ? 'neu' : good ? 'pos' : 'neg';
+      const arrow = pct>0.5?'▲':pct<-0.5?'▼':'─';
+      const barW = Math.min(Math.abs(pct), 100);
+      const barColor = cls==='pos'?'var(--green)':cls==='neg'?'var(--red)':'var(--muted)';
+      return `<div class="cmp-card ${cls}-card">
+        <div class="cmp-label">${m.label}</div>
+        <div class="cmp-curr">${fv(m.k,c)}</div>
+        <div class="cmp-prev">${prevLabel} ${fv(m.k,p)}</div>
+        <div class="cmp-change ${cls}">${arrow} ${Math.abs(pct).toFixed(1)}%</div>
+        <div class="cmp-bar"><div class="cmp-bar-fill" style="width:${barW}%;background:${barColor};"></div></div>
+      </div>`;
+    }).join('')}</div>`;
+  },
+
+  renderWeekCompare() {
+    const dates = [...new Set(Store.raw.map(r=>r.date))].sort();
+    if (dates.length < 7) { document.getElementById('card-week-cmp').classList.add('hidden'); return; }
+    const max = dates[dates.length-1];
+    const d = new Date(max+'T00:00:00');
+    const dow = d.getDay();
+    const toMon = dow===0 ? -6 : 1-dow;
+    const thisMon = new Date(d); thisMon.setDate(d.getDate()+toMon);
+    const lastMon = new Date(thisMon); lastMon.setDate(thisMon.getDate()-7);
+    const lastSun = new Date(thisMon); lastSun.setDate(thisMon.getDate()-1);
+    const fmt = x => x.toISOString().slice(0,10);
+    const fmtD = s => s.slice(5).replace('-','.');
+    const [tm, ls, lm] = [fmt(thisMon), fmt(lastSun), fmt(lastMon)];
+    const curr = this._aggRange(tm, max);
+    const prev = this._aggRange(lm, ls);
+    if (!prev.cost && !prev.conv) { document.getElementById('card-week-cmp').classList.add('hidden'); return; }
+    document.getElementById('week-cmp-title').innerHTML =
+      `📅 주차별 성과 비교 <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:4px;">이번 주 ${fmtD(tm)}~${fmtD(max)} vs 지난 주 ${fmtD(lm)}~${fmtD(ls)}</span>`;
+    this._renderCmpBody('week-cmp-body', curr, prev, '지난 주');
+    document.getElementById('card-week-cmp').classList.remove('hidden');
+  },
+
+  renderMonthCompare() {
+    const dates = [...new Set(Store.raw.map(r=>r.date))].sort();
+    if (!dates.length) return;
+    const thisYM = dates[dates.length-1].slice(0,7);
+    const [y, mo] = thisYM.split('-').map(Number);
+    const pm = mo===1?12:mo-1, py = mo===1?y-1:y;
+    const prevYM = `${py}-${String(pm).padStart(2,'0')}`;
+    const curr = this._aggRange(thisYM+'-01', thisYM+'-31');
+    const prev = this._aggRange(prevYM+'-01', prevYM+'-31');
+    if (!prev.cost && !prev.conv) { document.getElementById('card-month-cmp').classList.add('hidden'); return; }
+    document.getElementById('month-cmp-title').innerHTML =
+      `📆 전월 비교 <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:4px;">${mo}월 (${curr.days}일) vs ${pm}월 (${prev.days}일)</span>`;
+    this._renderCmpBody('month-cmp-body', curr, prev, `${pm}월`);
+    document.getElementById('card-month-cmp').classList.remove('hidden');
   },
 
   selectKPI(m, el) {
