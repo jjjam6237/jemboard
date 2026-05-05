@@ -1163,9 +1163,11 @@ const UI = {
     const dates = Store.raw.map(r=>r.date).sort();
     const minD = dates[0]||'', maxD = dates[dates.length-1]||'';
 
-    // 날짜 피커
+    // 날짜 피커 (기본값: 26년 4월 28~29일, 데이터 범위 내일 때만)
+    const defFrom = '2026-04-28' >= minD && '2026-04-28' <= maxD ? '2026-04-28' : minD;
+    const defTo   = '2026-04-29' >= minD && '2026-04-29' <= maxD ? '2026-04-29' : maxD;
     DP.create('dp-campaign', {
-      minDate: minD, maxDate: maxD, from: minD, to: maxD,
+      minDate: minD, maxDate: maxD, from: defFrom, to: defTo,
       onChange: () => this.applyFilter(),
     });
 
