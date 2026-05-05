@@ -252,6 +252,7 @@
     .loading-text { color: var(--text); font-size: 14px; }
 
     /* ── 블러 잠금 ── */
+    body.locked .csv-btn { display: none !important; }
     body.locked .kpi-value,
     body.locked .kpi-change,
     body.locked #fname,
@@ -295,7 +296,7 @@
   <div class="header-right" id="hdr-campaign">
     <span class="file-name" id="data-range" style="display:none;"></span>
     <span class="file-name" id="saved-info" style="color:var(--green);"></span>
-    <button class="btn btn-secondary btn-sm" onclick="Store.exportCSV()">⬇ CSV</button>
+    <button class="btn btn-secondary btn-sm csv-btn" onclick="Store.exportCSV()">⬇ CSV</button>
     <button class="btn btn-secondary btn-sm hidden" id="btn-reset" onclick="JBStorage.clearAll()" style="color:var(--red);">× 초기화</button>
     <button class="btn btn-secondary btn-sm hidden" id="btn-deploy" onclick="Deployer.open()" style="color:#a78bfa;border-color:#7c3aed33;">🚀 배포하기</button>
     <button class="btn btn-primary btn-sm" onclick="UI.showUpload()">📁 리포트 업로드</button>
@@ -303,7 +304,7 @@
   <div class="header-right hidden" id="hdr-keyword">
     <span class="file-name" id="kw-data-range" style="display:none;"></span>
     <span class="file-name" id="kw-saved-info" style="color:var(--green);"></span>
-    <button class="btn btn-secondary btn-sm" onclick="KWUI.exportCSV()">⬇ CSV</button>
+    <button class="btn btn-secondary btn-sm csv-btn" onclick="KWUI.exportCSV()">⬇ CSV</button>
     <button class="btn btn-secondary btn-sm hidden" id="btn-reset-kw" onclick="JBStorage.clearAll()" style="color:var(--red);">× 초기화</button>
     <button class="btn btn-secondary btn-sm hidden" id="btn-deploy-kw" onclick="Deployer.open()" style="color:#a78bfa;border-color:#7c3aed33;">🚀 배포하기</button>
     <button class="btn btn-primary btn-sm" onclick="KWUI.showUpload()">📁 키워드 업로드</button>
@@ -423,7 +424,7 @@
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
             <span style="font-size:11px;color:var(--muted);" id="row-count"></span>
-            <button class="btn btn-secondary btn-sm" onclick="Store.exportCSV()">⬇ CSV</button>
+            <button class="btn btn-secondary btn-sm csv-btn" onclick="Store.exportCSV()">⬇ CSV</button>
             <button class="collapse-btn" onclick="UI.toggleCard('card-table')">−</button>
           </div>
         </div>
@@ -783,6 +784,7 @@ const Store = {
   },
 
   exportCSV() {
+    if (document.body.classList.contains('locked')) return;
     const bd = this.byDate();
     const cols = ['날짜','노출수','클릭수','CTR(%)','광고비','CPC','전환수','CPA','전환매출','ROAS','GA전환','GA매출','앱설치'];
     const rows = bd.map(r => [
@@ -1772,6 +1774,7 @@ const KWStore = {
   },
 
   exportCSV() {
+    if (document.body.classList.contains('locked')) return;
     const cols = ['키워드','매체','노선','디바이스','노출','클릭','CTR(%)','광고비','CPC','전환','CPA','전환매출','ROAS','등급'];
     const gradeLabel = { scale:'확장', watch:'유지', review:'점검', none:'-' };
     const rows = this.filtered.map(r => [
