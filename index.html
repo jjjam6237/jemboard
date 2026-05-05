@@ -2317,6 +2317,14 @@ const KWUI = {
     MS.create('ms-kw-media',  { label:'매체',   options: KWStore.medias,  dots: MDOTS,          onChange: refresh });
     MS.create('ms-kw-route',  { label:'노선',   options: KWStore.routes,                         onChange: refresh });
     MS.create('ms-kw-device', { label:'디바이스', options: KWStore.devices,                       onChange: refresh });
+
+    // 초기 렌더 시 기본 날짜 범위를 즉시 필터에 반영
+    KWStore.dateFrom = defFrom;
+    KWStore.dateTo   = defTo;
+    KWStore.activeMedias  = [...KWStore.medias];
+    KWStore.activeRoutes  = [...KWStore.routes];
+    KWStore.activeDevices = [...KWStore.devices];
+    KWStore.applyFilter();
   },
 
   fmtW(v)  { return '₩' + Math.round(v).toLocaleString(); },
