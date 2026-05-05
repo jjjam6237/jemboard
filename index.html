@@ -3304,7 +3304,7 @@ async function fetchSourceStats() {
 
   const results = await Promise.all(
     sources.map(src =>
-      fetch(`https://api.counterapi.dev/v1/${ns}-${src}/visits`)
+      fetch(`https://api.counterapi.dev/v1/${ns}-${src}/visits/`)
         .then(r => r.ok ? r.json() : { count: 0 })
         .then(d => ({ src, count: d.count || 0 }))
         .catch(() => ({ src, count: 0 }))
