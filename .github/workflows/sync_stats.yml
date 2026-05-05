@@ -1,0 +1,38 @@
+name: Sync Visitor Stats
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch stats from counterapi.dev
+        run: |
+          NS="jemboard-jjjam6237"
+          SOURCES="wanted saramin jobkorea incruit linkedin jumpit remember direct"
+          JSON="{"
+          for SRC in $SOURCES; do
+            RESP=$(curl -sf "https://api.counterapi.dev/v1/${NS}-${SRC}/visits/" 2>/dev/null || echo '{"count":0}')
+            COUNT=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('count',0))" 2>/dev/null || echo "0")
+            JSON="${JSON}\"${SRC}\":${COUNT},"
+          done
+          RESP=$(curl -sf "https://api.counterapi.dev/v1/${NS}/visits/" 2>/dev/null || echo '{"count":0}')
+          TOTAL=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('count',0))" 2>/dev/null || echo "0")
+          JSON="${JSON%,},\"total\":${TOTAL}}"
+          echo "$JSON" > visitor_stats.json
+          echo "Stats: $JSON"
+
+      - name: Commit stats
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add visitor_stats.json
+          git diff --staged --quiet || git commit -m "chore: sync visitor stats [skip ci]"
+          git push
