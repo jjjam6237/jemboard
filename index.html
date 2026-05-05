@@ -2235,12 +2235,12 @@ const Deployer = {
       const files = [];
 
       // 캠페인 데이터
-      if (Store.rows?.length) {
+      if (Store.raw?.length) {
         setMsg('캠페인 데이터 준비 중...');
         const fname = document.getElementById('fname').textContent.replace(/^ — /, '').trim();
         files.push({
           path: 'data.json',
-          content: JSON.stringify({ fileName: fname, updatedAt: new Date().toISOString(), rows: Store.rows })
+          content: JSON.stringify({ fileName: fname, updatedAt: new Date().toISOString(), rows: Store.raw })
         });
       }
 
