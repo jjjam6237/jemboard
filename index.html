@@ -2523,15 +2523,17 @@ const KWUI = {
     }
     const ptot = prevAllRows.reduce((a,r)=>({ conv:a.conv+r.conv, cost:a.cost+r.cost, revenue:a.revenue+r.revenue }), {conv:0,cost:0,revenue:0});
 
-    const badge = (curr, prev, lowerBetter=false) => {
+    const badge = (curr, prev, lowerBetter=false, useAbs=false) => {
       if (!prevDate || prev === 0) return '';
       const delta = curr - prev;
       if (Math.abs(delta/Math.max(prev,1)) < 0.005) return `<span class="mini-chg neu" style="display:block;margin-top:3px;">─ 변화없음</span>`;
       const good = lowerBetter ? delta < 0 : delta > 0;
       const cls = good ? 'pos' : 'neg';
       const arrow = delta > 0 ? '▲' : '▼';
-      const pct = Math.abs(delta/prev*100).toFixed(1);
-      return `<span class="mini-chg ${cls}" style="display:block;margin-top:3px;">${arrow} ${pct}%</span>`;
+      const display = useAbs
+        ? Math.abs(Math.round(delta)).toLocaleString()
+        : Math.abs(delta/prev*100).toFixed(1) + '%';
+      return `<span class="mini-chg ${cls}" style="display:block;margin-top:3px;">${arrow} ${display}</span>`;
     };
 
     const avgCpa  = tot.conv>0  ? tot.cost/tot.conv    : 0;
@@ -2543,8 +2545,8 @@ const KWUI = {
       `⚡ 전일 전환 키워드 <span style="font-size:11px;color:#9ca3af;font-weight:400;margin-left:6px;">${maxDate} 기준${prevDate?' (vs '+prevDate.slice(5)+')':''}</span>`;
     document.getElementById('kw-conv-count').textContent = `총 ${allRows.length}개 키워드`;
     document.getElementById('kw-conv-summary').innerHTML = [
-      { label:'전환 키워드 수', value: allRows.length+'개',   b: badge(allRows.length, prevAllRows.length) },
-      { label:'총 전환수',      value: fw(tot.conv,''),       b: badge(tot.conv, ptot.conv) },
+      { label:'전환 키워드 수', value: allRows.length+'개',   b: badge(allRows.length, prevAllRows.length, false, true) },
+      { label:'총 전환수',      value: fw(tot.conv,''),       b: badge(tot.conv, ptot.conv, false, true) },
       { label:'평균 CPA',       value: fw(avgCpa,'₩'),        b: badge(avgCpa, pAvgCpa, true) },
       { label:'평균 ROAS',      value: fw(avgRoas,'x'),       b: badge(avgRoas, pAvgRoas) },
     ].map(k=>`<div class="conv-kpi">
