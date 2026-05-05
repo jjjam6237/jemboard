@@ -253,6 +253,7 @@
 
     /* ── 블러 잠금 ── */
     body.locked .csv-btn { display: none !important; }
+    body.locked .admin-btn { display: none !important; }
     body.locked .kpi-value,
     body.locked .kpi-change,
     body.locked #fname,
@@ -297,17 +298,17 @@
     <span class="file-name" id="data-range" style="display:none;"></span>
     <span class="file-name" id="saved-info" style="color:var(--green);"></span>
     <button class="btn btn-secondary btn-sm csv-btn" onclick="Store.exportCSV()">⬇ CSV</button>
-    <button class="btn btn-secondary btn-sm hidden" id="btn-reset" onclick="JBStorage.clearAll()" style="color:var(--red);">× 초기화</button>
-    <button class="btn btn-secondary btn-sm hidden" id="btn-deploy" onclick="Deployer.open()" style="color:#a78bfa;border-color:#7c3aed33;">🚀 배포하기</button>
-    <button class="btn btn-primary btn-sm" onclick="UI.showUpload()">📁 리포트 업로드</button>
+    <button class="btn btn-secondary btn-sm hidden admin-btn" id="btn-reset" onclick="JBStorage.clearAll()" style="color:var(--red);">× 초기화</button>
+    <button class="btn btn-secondary btn-sm hidden admin-btn" id="btn-deploy" onclick="Deployer.open()" style="color:#a78bfa;border-color:#7c3aed33;">🚀 배포하기</button>
+    <button class="btn btn-primary btn-sm admin-btn" onclick="UI.showUpload()">📁 리포트 업로드</button>
   </div>
   <div class="header-right hidden" id="hdr-keyword">
     <span class="file-name" id="kw-data-range" style="display:none;"></span>
     <span class="file-name" id="kw-saved-info" style="color:var(--green);"></span>
     <button class="btn btn-secondary btn-sm csv-btn" onclick="KWUI.exportCSV()">⬇ CSV</button>
-    <button class="btn btn-secondary btn-sm hidden" id="btn-reset-kw" onclick="JBStorage.clearAll()" style="color:var(--red);">× 초기화</button>
-    <button class="btn btn-secondary btn-sm hidden" id="btn-deploy-kw" onclick="Deployer.open()" style="color:#a78bfa;border-color:#7c3aed33;">🚀 배포하기</button>
-    <button class="btn btn-primary btn-sm" onclick="KWUI.showUpload()">📁 키워드 업로드</button>
+    <button class="btn btn-secondary btn-sm hidden admin-btn" id="btn-reset-kw" onclick="JBStorage.clearAll()" style="color:var(--red);">× 초기화</button>
+    <button class="btn btn-secondary btn-sm hidden admin-btn" id="btn-deploy-kw" onclick="Deployer.open()" style="color:#a78bfa;border-color:#7c3aed33;">🚀 배포하기</button>
+    <button class="btn btn-primary btn-sm admin-btn" onclick="KWUI.showUpload()">📁 키워드 업로드</button>
   </div>
 </header>
 
