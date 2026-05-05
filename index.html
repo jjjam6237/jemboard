@@ -1735,7 +1735,7 @@ const UI = {
   collapseTable() {
     this.tableShowCount = 30;
     this.renderTable();
-    document.getElementById('card-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById('card-table')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   },
 
   renderTable() {
@@ -2116,7 +2116,7 @@ function scrollToSection(id) {
     const btn = el.querySelector('.collapse-btn');
     if (btn) btn.textContent = '−';
   }
-  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   // 스크롤 후 깜빡 효과
   setTimeout(() => {
     el.classList.remove('nav-flash');
