@@ -3302,13 +3302,15 @@ async function fetchSourceStats() {
   if (!listEl) return;
   listEl.innerHTML = '<div style="color:var(--muted);font-size:11px;">불러오는 중...</div>';
 
+  const proxy = 'https://corsproxy.io/?';
   const results = await Promise.all(
-    sources.map(src =>
-      fetch(`https://api.counterapi.dev/v1/${ns}-${src}/visits/`)
+    sources.map(src => {
+      const url = proxy + encodeURIComponent(`https://api.counterapi.dev/v1/${ns}-${src}/visits/`);
+      return fetch(url)
         .then(r => r.ok ? r.json() : { count: 0 })
         .then(d => ({ src, count: d.count || 0 }))
-        .catch(() => ({ src, count: 0 }))
-    )
+        .catch(() => ({ src, count: 0 }));
+    })
   );
 
   const rows = results.filter(r => r.count > 0).sort((a, b) => b.count - a.count);
