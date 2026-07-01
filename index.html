@@ -269,8 +269,6 @@
     .pacing-fill.over { background: var(--red); }
     .pacing-pct { font-size: 12px; font-weight: 700; text-align: right; }
     .pacing-proj { font-size: 11px; color: var(--muted); margin-top: 3px; }
-    body.locked .pacing-detail { display: none; }
-
     /* ── 비교 카드 ── */
     .cmp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px,1fr)); gap: 10px; }
     .cmp-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 12px; position: relative; overflow: hidden; }
@@ -329,45 +327,6 @@
     .nav-flash { animation:nav-flash .55s ease 3; }
     body.kw-mode .nav-flash { animation:nav-flash-kw .55s ease 3; }
 
-    /* ── 블러 잠금 ── */
-    body.locked .csv-btn { display: none !important; }
-    body.locked .admin-btn { display: none !important; }
-    body.locked .kpi-value,
-    body.locked .kpi-change,
-    body.locked #fname,
-    body.locked #data-range,
-    body.locked canvas,
-    body.locked td:not(:first-child),
-    body.locked .ins,
-    body.locked .ins-action,
-    body.locked .grade-num,
-    body.locked .kw-kpi-value,
-    body.locked .kw-kpi-sub,
-    body.locked .kw-table td,
-    body.locked .cmp-curr,
-    body.locked .cmp-prev,
-    body.locked .cmp-change,
-    body.locked .conv-kpi-value,
-    body.locked .mini-chg { filter: blur(6px); user-select: none; pointer-events: none; transition: filter .3s; }
-    body:not(.locked) .kpi-value,
-    body:not(.locked) .kpi-change,
-    body:not(.locked) canvas,
-    body:not(.locked) td,
-    body:not(.locked) .ins,
-    body:not(.locked) .ins-action,
-    body:not(.locked) .grade-num,
-    body:not(.locked) .kw-kpi-value,
-    body:not(.locked) .kw-kpi-sub { filter: none; transition: filter .3s; }
-
-    #lock-panel { position: fixed; inset: 0; top: 50px; z-index: 400; display: flex; align-items: center; justify-content: center; pointer-events: none; }
-    body:not(.locked) #lock-panel { display: none; }
-    #lock-card { background: rgba(15,17,23,.9); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.1); border-radius: 20px; padding: 36px 40px; text-align: center; pointer-events: all; box-shadow: 0 24px 64px rgba(0,0,0,.6); min-width: 320px; }
-
-    #lock-input { padding: 9px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; outline: none; width: 190px; }
-    #lock-input:focus { border-color: var(--blue); }
-    #lock-btn { padding: 9px 18px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
-    #lock-btn:hover { background: #3a8ef0; }
-
     /* ── 리포트 코멘트 ── */
     .notes-editor { width: 100%; min-height: 130px; padding: 12px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; line-height: 1.75; resize: vertical; font-family: inherit; outline: none; transition: border-color .15s; }
     .notes-editor:focus { border-color: var(--blue); }
@@ -376,7 +335,6 @@
     .memo-btn { background: none; border: 1px solid transparent; border-radius: 4px; width: 20px; height: 20px; cursor: pointer; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; transition: all .12s; vertical-align: middle; margin-left: 5px; line-height: 1; color: var(--muted); }
     .memo-btn:hover { background: var(--hover); border-color: var(--blue); color: var(--blue); }
     .memo-btn.has-note { border-color: rgba(243,156,18,.5); color: var(--orange); background: rgba(243,156,18,.1); }
-    body.locked .memo-btn { display: none; }
   </style>
 </head>
 <body>
@@ -390,7 +348,6 @@
       <div id="view-stats-list"></div>
     </div>
   </span>
-  <button id="btn-lock" onclick="Lock.lock()" title="데이터 잠금" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;display:none;" title="잠금">🔓</button>
   <div class="tab-bar">
     <button class="tab-btn active" id="tab-campaign" onclick="switchTab('campaign')">📊 캠페인 개요</button>
     <button class="tab-btn" id="tab-keyword" onclick="switchTab('keyword')">🔑 키워드 분석</button>
@@ -780,26 +737,6 @@
   </div>
 </div>
 
-<!-- Lock panel -->
-<div id="lock-panel">
-  <div style="display:flex;align-items:flex-end;gap:20px;">
-
-
-    <!-- 잠금 카드 -->
-    <div id="lock-card">
-      <div style="font-size:44px;margin-bottom:14px;">🔒</div>
-      <div style="font-size:17px;font-weight:700;color:#fff;margin-bottom:8px;">포트폴리오 데이터 보호</div>
-      <div style="font-size:12px;color:#8b90a0;line-height:1.7;margin-bottom:22px;">실제 광고 데이터가 포함되어 있습니다.<br>비밀번호를 입력하면 전체 데이터를 볼 수 있습니다.</div>
-      <div style="display:flex;gap:8px;justify-content:center;">
-        <input type="password" id="lock-input" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter')Lock.unlock()">
-        <button id="lock-btn" onclick="Lock.unlock()">확인</button>
-      </div>
-      <div id="lock-error" style="color:#e74c3c;font-size:12px;margin-top:10px;min-height:16px;"></div>
-    </div>
-
-  </div>
-</div>
-
 <!-- Deploy modal -->
 <div id="m-deploy" class="overlay hidden" onclick="if(event.target===this)Deployer.close()">
   <div class="modal" style="width:400px;">
@@ -1040,7 +977,6 @@ const Store = {
   },
 
   exportCSV() {
-    if (document.body.classList.contains('locked')) return;
     const bd = this.byDate();
     const cols = ['날짜','노출수','클릭수','CTR(%)','광고비','CPC','전환수','CPA','전환매출','ROAS','GA전환','GA매출','앱설치'];
     const rows = bd.map(r => [
@@ -2303,7 +2239,6 @@ const KWStore = {
   },
 
   exportCSV() {
-    if (document.body.classList.contains('locked')) return;
     const cols = ['키워드','매체','노선','디바이스','노출','클릭','CTR(%)','광고비','CPC','전환','CPA','전환매출','ROAS','등급'];
     const gradeLabel = { scale:'확장', watch:'유지', review:'점검', none:'-' };
     const rows = this.filtered.map(r => [
@@ -3055,44 +2990,6 @@ const Notes = {
   },
 };
 
-// ── 블러 잠금 ──────────────────────────────────────────────────────────────────
-const Lock = {
-  _pw: 'dlwoals12',
-
-  init() {
-    if (sessionStorage.getItem('jb_unlocked') === '1') {
-      this._setUnlocked();
-    } else {
-      document.body.classList.add('locked');
-    }
-  },
-
-  unlock() {
-    const val = document.getElementById('lock-input').value;
-    if (val === this._pw) {
-      sessionStorage.setItem('jb_unlocked', '1');
-      this._setUnlocked();
-    } else {
-      document.getElementById('lock-error').textContent = '비밀번호가 틀렸습니다';
-      document.getElementById('lock-input').value = '';
-      document.getElementById('lock-input').focus();
-    }
-  },
-
-  lock() {
-    sessionStorage.removeItem('jb_unlocked');
-    document.body.classList.add('locked');
-    document.getElementById('btn-lock').style.display = 'none';
-    document.getElementById('lock-input').value = '';
-    document.getElementById('lock-error').textContent = '';
-  },
-
-  _setUnlocked() {
-    document.body.classList.remove('locked');
-    document.getElementById('btn-lock').style.display = 'block';
-  },
-};
-
 // ── GitHub 배포 ────────────────────────────────────────────────────────────────
 const Deployer = {
   OWNER: 'jjjam6237',
@@ -3305,7 +3202,6 @@ async function trackPageView() {
     if (vcEl) {
       vcEl.style.cursor = 'pointer';
       vcEl.addEventListener('click', (e) => {
-        if (document.body.classList.contains('locked')) return;
         e.stopPropagation();
         const popup = document.getElementById('view-stats-popup');
         if (!popup) return;
@@ -3354,7 +3250,6 @@ async function fetchSourceStats() {
 }
 
 initDashboard();
-Lock.init();
 trackPageView();
 </script>
 </body>
