@@ -45,8 +45,8 @@ const CH = {
     const datasets = medias.map(media => ({
       label: media,
       data: dates.map(d => (byKey[`${d}__${media}`]?.[m] || 0)),
-      backgroundColor: (MEDIA_COLORS[media] || '#666') + 'aa',
-      borderColor: MEDIA_COLORS[media] || '#666',
+      backgroundColor: getDimColor(media) + 'aa',
+      borderColor: getDimColor(media),
       borderWidth: 1, borderRadius: 3,
     }));
     if (this.media) this.media.destroy();
@@ -62,7 +62,7 @@ const CH = {
     const rd = Store.byRoute().sort((a,b) => (b[m]||0)-(a[m]||0));
     const labels = rd.map(r=>r.route);
     const data   = rd.map(r=>r[m]||0);
-    const bgColors = labels.map(l => (ROUTE_COLORS[l] || '#888') + 'cc');
+    const bgColors = labels.map(l => getDimColor(l) + 'cc');
     if (this.route) this.route.destroy();
     this.route = new Chart(document.getElementById('c-route'), {
       type: 'bar',
@@ -88,8 +88,8 @@ const CH = {
     const datasets = devices.map(dev => ({
       label: dev,
       data: dates.map(d => (byKey[`${d}__${dev}`]?.cost || 0)),
-      backgroundColor: (DEVICE_COLORS[dev] || '#888') + 'aa',
-      borderColor: DEVICE_COLORS[dev] || '#888',
+      backgroundColor: getDimColor(dev) + 'aa',
+      borderColor: getDimColor(dev),
       borderWidth:1, borderRadius:3,
     }));
     if (this.device) this.device.destroy();
@@ -329,9 +329,10 @@ const UI = {
     });
 
     // 드롭다운 필터
-    MS.create('ms-c-device', { label:'디바이스', options: Store.devices, dots: DEVICE_COLORS, onChange: () => this.applyFilter() });
-    MS.create('ms-c-media',  { label:'매체',     options: Store.medias,  dots: MEDIA_COLORS,  onChange: () => this.applyFilter() });
-    MS.create('ms-c-route',  { label:'대노선',   options: Store.routes,  dots: ROUTE_COLORS,  onChange: () => this.applyFilter() });
+    const makeDots = (values) => Object.fromEntries(values.map(v => [v, getDimColor(v)]));
+    MS.create('ms-c-device', { label:'디바이스', options: Store.devices, dots: makeDots(Store.devices), onChange: () => this.applyFilter() });
+    MS.create('ms-c-media',  { label:'매체',     options: Store.medias,  dots: makeDots(Store.medias),  onChange: () => this.applyFilter() });
+    MS.create('ms-c-route',  { label:'분류',     options: Store.routes,  dots: makeDots(Store.routes),  onChange: () => this.applyFilter() });
   },
 
   applyFilter() {
@@ -1898,6 +1899,68 @@ const Notes = {
       download: `jemboard_notes_${new Date().toISOString().slice(0,10)}.txt`,
     });
     a.click();
+  },
+};
+
+// ── 컬럼 매핑 UI ───────────────────────────────────────────────────────────────
+const MappingUI = {
+  open() {
+    document.getElementById('m-schema').classList.remove('hidden');
+    this._render();
+  },
+
+  close() {
+    document.getElementById('m-schema').classList.add('hidden');
+  },
+
+  _render() {
+    const opts0 = `<option value="">— 매핑 없음 —</option>` +
+      SchemaMap.headers.map(h => `<option value="${h}">${h}</option>`).join('');
+    const rows = Object.entries(FIELD_SCHEMA).map(([field, cfg]) => {
+      const cur = SchemaMap.get(field) || '';
+      const opts = `<option value="">— 매핑 없음 —</option>` +
+        SchemaMap.headers.map(h => `<option value="${h}"${h===cur?' selected':''}>${h}</option>`).join('');
+      const ok = !!cur;
+      const icon = ok ? '✓' : (cfg.required ? '⚠' : '○');
+      const clr = ok ? 'var(--green)' : (cfg.required ? 'var(--orange)' : 'var(--muted)');
+      return `<tr style="border-bottom:1px solid var(--border);">
+        <td style="color:${clr};font-weight:700;padding:6px 8px;width:20px;">${icon}</td>
+        <td style="font-size:12px;padding:6px 4px;white-space:nowrap;">
+          ${cfg.label}${cfg.required ? '<span style="color:var(--red)">*</span>' : ''}
+        </td>
+        <td style="padding:4px 0 4px 8px;">
+          <select class="f-input schema-sel" data-field="${field}"
+            style="width:100%;font-size:12px;padding:4px 8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;">
+            ${opts}
+          </select>
+        </td>
+      </tr>`;
+    }).join('');
+    document.getElementById('schema-table-body').innerHTML = rows;
+  },
+
+  save() {
+    document.querySelectorAll('.schema-sel').forEach(sel => {
+      SchemaMap.set(sel.dataset.field, sel.value || null);
+    });
+    const rows = SchemaMap.reExtract();
+    if (!rows.length) { alert('매핑 결과 데이터가 없습니다. 날짜·광고비 컬럼을 확인하세요.'); return; }
+    Store.load(rows);
+    UI.render();
+    this.updateBadge();
+    this.close();
+  },
+
+  updateBadge() {
+    const total = Object.keys(FIELD_SCHEMA).length;
+    const mapped = SchemaMap.getMappedCount();
+    const warn = SchemaMap.hasCriticalMissing();
+    const badge = document.getElementById('schema-badge');
+    if (!badge) return;
+    badge.textContent = `${warn ? '⚠' : '✓'} 매핑 ${mapped}/${total}`;
+    badge.style.borderColor = warn ? 'var(--orange)' : 'var(--green)';
+    badge.style.color = warn ? 'var(--orange)' : 'var(--green)';
+    badge.classList.remove('hidden');
   },
 };
 

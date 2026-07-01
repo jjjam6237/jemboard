@@ -27,6 +27,7 @@
     <span class="file-name" id="data-range" style="display:none;"></span>
     <span class="file-name" id="saved-info" style="color:var(--green);"></span>
     <button class="btn btn-secondary btn-sm csv-btn" onclick="Store.exportCSV()">⬇ CSV</button>
+    <button id="schema-badge" class="btn btn-secondary btn-sm hidden admin-btn" onclick="MappingUI.open()" style="font-size:11px;">✓ 매핑</button>
     <button class="btn btn-secondary btn-sm hidden admin-btn" id="btn-reset" onclick="JBStorage.clearAll()" style="color:var(--red);">× 초기화</button>
     <button class="btn btn-secondary btn-sm hidden admin-btn" id="btn-deploy" onclick="Deployer.open()" style="color:#a78bfa;border-color:#7c3aed33;">🚀 배포하기</button>
     <button class="btn btn-primary btn-sm admin-btn" onclick="UI.showUpload()">📁 리포트 업로드</button>
@@ -46,9 +47,9 @@
 
 <!-- Empty state -->
 <div id="empty" class="empty">
-  <div class="empty-icon">✈️</div>
-  <div class="empty-title">제주항공 SA 일일 리포트를 업로드하세요</div>
-  <div class="empty-desc">Excel 파일(.xlsx)을 업로드하면<br><strong>raw(합계)</strong> 시트를 자동으로 파싱합니다</div>
+  <div class="empty-icon">📊</div>
+  <div class="empty-title">광고 리포트를 업로드하세요</div>
+  <div class="empty-desc">Excel 파일(.xlsx)을 업로드하면 헤더를 자동으로 인식합니다.<br><strong>날짜·광고비·클릭수</strong>가 있는 파일이면 바로 분석 가능합니다.</div>
   <button class="btn btn-primary" style="margin-top:8px;" onclick="UI.showUpload()">📁 파일 업로드</button>
 </div>
 
@@ -387,13 +388,32 @@
   </div>
 </div>
 
+<!-- Schema mapping modal -->
+<div id="m-schema" class="overlay hidden" onclick="if(event.target===this)MappingUI.close()">
+  <div class="modal" style="width:460px;max-height:80vh;display:flex;flex-direction:column;">
+    <div class="modal-title">🗺 컬럼 매핑 설정</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">
+      파일 헤더와 대시보드 필드를 연결합니다. <span style="color:var(--red);">*</span> 는 필수 필드입니다.
+    </div>
+    <div style="overflow-y:auto;flex:1;">
+      <table style="width:100%;border-collapse:collapse;">
+        <tbody id="schema-table-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-secondary" onclick="MappingUI.close()">취소</button>
+      <button class="btn btn-primary" onclick="MappingUI.save()">적용하기</button>
+    </div>
+  </div>
+</div>
+
 <!-- Upload modal -->
 <div id="m-upload" class="overlay hidden">
   <div class="modal">
     <div class="modal-title">📁 리포트 파일 업로드</div>
     <div class="info-box">
-      <strong>raw(합계)</strong> 시트를 자동으로 인식합니다.<br>
-      (Dpurple) 제주항공_SA_Daily Report_YYYYMMDD.xlsx 형식
+      헤더 행을 자동으로 인식합니다. <strong>날짜·광고비·클릭수</strong> 컬럼이 있으면 됩니다.<br>
+      업로드 후 <strong>매핑 뱃지</strong>를 클릭해 컬럼 연결을 확인·수정할 수 있습니다.
     </div>
     <div class="drop-zone" id="drop-zone" onclick="document.getElementById('f-file').click()">
       <div class="drop-icon">📂</div>

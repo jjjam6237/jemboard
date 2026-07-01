@@ -1,25 +1,103 @@
-// ── 컬럼 인덱스 (raw(합계) 시트 기준, 0-based) ──────────────────────────────
-const CI = {
-  date:0, weekday:1, type:2, device:3, media:4, campaign:5,
-  route:6, routeDetail:7,
-  impr:8, clicks:9, cost:10,
-  conv:11, revenue:12,
-  gaConv:13, gaRev:14,
-  appPurchase:15, appRevenue:16, appInstall:17, webPurchase:18
+// ── 필드 스키마 ────────────────────────────────────────────────────────────────
+const FIELD_SCHEMA = {
+  date:        { label:'날짜',     required:true,  aliases:['날짜','date','Date'] },
+  weekday:     { label:'요일',     required:false, aliases:['요일','weekday','Weekday'] },
+  device:      { label:'디바이스', required:false, aliases:['디바이스','device','Device'] },
+  media:       { label:'매체',     required:false, aliases:['매체구분','매체','media','Media','Channel'] },
+  campaign:    { label:'캠페인',   required:false, aliases:['캠페인','campaign','Campaign','캠페인명'] },
+  route:       { label:'분류',     required:false, aliases:['대노선 구분','노선','분류','route','Route','Category'] },
+  routeDetail: { label:'분류상세', required:false, aliases:['노선 세부 구분','분류상세','routeDetail','Sub Category'] },
+  impr:        { label:'노출수',   required:true,  aliases:['노출수','노출','impressions','Impressions'] },
+  clicks:      { label:'클릭수',   required:true,  aliases:['클릭','클릭수','clicks','Clicks'] },
+  cost:        { label:'광고비',   required:true,  aliases:['광고비','cost','Cost','비용'] },
+  conv:        { label:'전환수',   required:false, aliases:['전환수','전환','conversions','Conversions'] },
+  revenue:     { label:'전환매출', required:false, aliases:['총 전환 매출','전환매출','revenue','Revenue','매출'] },
+  gaConv:      { label:'GA전환',   required:false, aliases:['GA전환','GA전환수','GA Conversions'] },
+  gaRev:       { label:'GA매출',   required:false, aliases:['GA매출','GA Revenue'] },
+  appPurchase: { label:'앱구매',   required:false, aliases:['구매(App)','앱구매','App Purchase'] },
+  appRevenue:  { label:'앱매출',   required:false, aliases:['매출액(App)','앱매출','App Revenue'] },
+  appInstall:  { label:'앱설치',   required:false, aliases:['앱 설치 수','앱설치','App Install'] },
+  webPurchase: { label:'웹구매',   required:false, aliases:['구매(Web)','웹구매','Web Purchase'] },
 };
 
-// 헤더 행이 있으면 offset +1 (sheet_to_json header:1 사용 시 데이터만 옴)
-// sheet_to_json({header:1}) → 배열 배열, 0번=헤더, 1번~=데이터
-// 실제 컬럼 B=index1 → 0-based 배열에서 index1
+// ── 스키마 매핑 ─────────────────────────────────────────────────────────────────
+const SchemaMap = {
+  mapping: {},   // { fieldKey: actualHeaderName | null }
+  headers: [],   // all headers from uploaded file
+  _all: null, _headerIdx: -1, _colMap: {},
 
-const ROUTE_COLORS = {
-  '자사':'#4c9eff','국내선':'#2ecc71','일본':'#e74c3c','동남아':'#f39c12',
-  '중화권':'#9b59b6','대양주':'#1abc9c','몽골':'#e67e22','일반':'#00bcd4','네이버 브랜드검색':'#ff6b9d'
+  autoMap(headers) {
+    this.headers = headers;
+    this.mapping = {};
+    for (const [field, cfg] of Object.entries(FIELD_SCHEMA)) {
+      const match = headers.find(h =>
+        cfg.aliases.some(a => a.toLowerCase() === String(h).toLowerCase())
+      );
+      this.mapping[field] = match || null;
+    }
+  },
+
+  set(field, header) { this.mapping[field] = header || null; },
+  get(field) { return this.mapping[field] || null; },
+  getMappedCount() { return Object.values(this.mapping).filter(Boolean).length; },
+  hasCriticalMissing() { return ['date','impr','clicks','cost'].some(f => !this.mapping[f]); },
+
+  _col(field) {
+    const h = this.get(field);
+    return h != null ? this._colMap[h] : undefined;
+  },
+
+  _extractRows() {
+    const rows = [];
+    for (let i = this._headerIdx + 1; i < this._all.length; i++) {
+      const row = this._all[i] || [];
+      const dateVal = row[this._col('date')];
+      if (dateVal == null) continue;
+      const date = parseDate(dateVal);
+      if (!date) continue;
+      rows.push({
+        date,
+        weekday:     String(row[this._col('weekday')]     || '').trim(),
+        device:      String(row[this._col('device')]      || '').trim(),
+        media:       String(row[this._col('media')]       || '').trim(),
+        campaign:    String(row[this._col('campaign')]    || '').trim(),
+        route:       String(row[this._col('route')]       || '').trim(),
+        routeDetail: String(row[this._col('routeDetail')] || '').trim(),
+        impr:        parseNum(row[this._col('impr')]),
+        clicks:      parseNum(row[this._col('clicks')]),
+        cost:        parseNum(row[this._col('cost')]),
+        conv:        parseNum(row[this._col('conv')]),
+        revenue:     parseNum(row[this._col('revenue')]),
+        gaConv:      parseNum(row[this._col('gaConv')]),
+        gaRev:       parseNum(row[this._col('gaRev')]),
+        appPurchase: parseNum(row[this._col('appPurchase')]),
+        appRevenue:  parseNum(row[this._col('appRevenue')]),
+        appInstall:  parseNum(row[this._col('appInstall')]),
+        webPurchase: parseNum(row[this._col('webPurchase')]),
+      });
+    }
+    return rows;
+  },
+
+  reExtract() { return this._extractRows(); },
 };
-const MEDIA_COLORS = { '네이버':'#03c75a','구글':'#4285f4','네이버 브랜드검색_종합':'#00b4d8' };
+
+// ── 컬러 ────────────────────────────────────────────────────────────────────────
 const DEVICE_COLORS = { 'Mobile':'#f39c12','PC':'#4c9eff' };
 const CHART_COLORS = ['#4c9eff','#2ecc71','#e74c3c','#f39c12','#9b59b6','#1abc9c','#e67e22','#00bcd4'];
 
+const _dimColorCache = {};
+function getDimColor(value) {
+  if (!value) return '#888';
+  if (DEVICE_COLORS[value]) return DEVICE_COLORS[value];
+  if (!_dimColorCache[value]) {
+    const idx = Object.keys(_dimColorCache).length % CHART_COLORS.length;
+    _dimColorCache[value] = CHART_COLORS[idx];
+  }
+  return _dimColorCache[value];
+}
+
+// ── 지표 ─────────────────────────────────────────────────────────────────────
 const METRICS = {
   cost:    { label:'광고비',    fmt:'won' },
   impr:    { label:'노출수',    fmt:'num' },
@@ -55,7 +133,6 @@ function parseNum(v) {
 
 function parseDate(v) {
   if (v === null || v === undefined) return '';
-  // Excel 날짜 시리얼 숫자 (raw:true 일 때)
   if (typeof v === 'number' && v > 40000 && v < 70000) {
     const d = new Date(Math.round((v - 25569) * 86400 * 1000));
     const y = d.getUTCFullYear(), mo = d.getUTCMonth() + 1, dd = d.getUTCDate();
@@ -194,7 +271,7 @@ const Store = {
     const csv = '﻿' + [cols, ...rows].map(r=>r.join(',')).join('\n');
     const a = Object.assign(document.createElement('a'), {
       href: URL.createObjectURL(new Blob([csv], {type:'text/csv'})),
-      download: 'jeju_sa_report.csv',
+      download: 'report.csv',
     });
     a.click();
   },
@@ -208,7 +285,7 @@ const Parser = {
     UI.showLoading('데이터 파싱 중...');
     const reader = new FileReader();
     reader.onload = e => {
-      setTimeout(() => { // let loading UI render
+      setTimeout(() => {
         try {
           const wb = XLSX.read(e.target.result, { type: 'array', cellDates: false });
           const sheetName = wb.SheetNames.find(n => n.includes('raw') || n.includes('합계')) || wb.SheetNames[0];
@@ -216,50 +293,30 @@ const Parser = {
           const all = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
 
           let headerIdx = -1, colMap = {};
+          const dateAliases = FIELD_SCHEMA.date.aliases;
           for (let i = 0; i < Math.min(10, all.length); i++) {
             const row = all[i] || [];
-            const dateCol = row.findIndex(c => String(c || '').trim() === '날짜');
+            const dateCol = row.findIndex(c =>
+              dateAliases.some(a => a.toLowerCase() === String(c || '').trim().toLowerCase())
+            );
             if (dateCol !== -1) {
               headerIdx = i;
               row.forEach((name, ci) => { colMap[String(name || '').trim()] = ci; });
               break;
             }
           }
-          if (headerIdx === -1) { UI.hideLoading(); alert('날짜 컬럼을 찾을 수 없습니다. raw(합계) 시트를 확인해 주세요.'); return; }
+          if (headerIdx === -1) { UI.hideLoading(); alert('날짜 컬럼을 찾을 수 없습니다. 헤더 행을 확인해 주세요.'); return; }
 
-          const rows = [];
-          for (let i = headerIdx + 1; i < all.length; i++) {
-            const row = all[i] || [];
-            const dateVal = row[colMap['날짜']];
-            if (dateVal === null || dateVal === undefined) continue;
-            const date = parseDate(dateVal);
-            if (!date) continue;
+          const headers = (all[headerIdx] || []).map(h => String(h || '').trim()).filter(Boolean);
+          SchemaMap.autoMap(headers);
+          SchemaMap._all = all;
+          SchemaMap._headerIdx = headerIdx;
+          SchemaMap._colMap = colMap;
 
-            rows.push({
-              date,
-              weekday:     String(row[colMap['요일']] || '').trim(),
-              device:      String(row[colMap['디바이스']] || '').trim(),
-              media:       String(row[colMap['매체구분']] || '').trim(),
-              campaign:    String(row[colMap['캠페인']] || '').trim(),
-              route:       String(row[colMap['대노선 구분']] || '').trim(),
-              routeDetail: String(row[colMap['노선 세부 구분']] || '').trim(),
-              impr:        parseNum(row[colMap['노출수']]),
-              clicks:      parseNum(row[colMap['클릭']]),
-              cost:        parseNum(row[colMap['광고비']]),
-              conv:        parseNum(row[colMap['전환수']]),
-              revenue:     parseNum(row[colMap['총 전환 매출']]),
-              gaConv:      parseNum(row[colMap['GA전환']]),
-              gaRev:       parseNum(row[colMap['GA매출']]),
-              appPurchase: parseNum(row[colMap['구매(App)']]),
-              appRevenue:  parseNum(row[colMap['매출액(App)']]),
-              appInstall:  parseNum(row[colMap['앱 설치 수']]),
-              webPurchase: parseNum(row[colMap['구매(Web)']]),
-            });
-          }
+          const rows = SchemaMap._extractRows();
 
           if (!rows.length) {
             UI.hideLoading();
-            // 진단 정보를 페이지에 출력
             const dbg = [
               '시트 목록: ' + wb.SheetNames.join(', '),
               '선택된 시트: ' + sheetName,
@@ -268,9 +325,7 @@ const Parser = {
               '행0 샘플: ' + JSON.stringify((all[0]||[]).slice(0,5)),
               '행1 샘플: ' + JSON.stringify((all[1]||[]).slice(0,5)),
               'colMap: ' + JSON.stringify(colMap),
-              '날짜 col idx: ' + colMap['날짜'],
-              '날짜 첫 값(raw): ' + (all[headerIdx+1]||[])[colMap['날짜']],
-              'parseDate 결과: ' + parseDate((all[headerIdx+1]||[])[colMap['날짜']]),
+              '날짜 매핑: ' + SchemaMap.get('date'),
             ].join('\n');
             document.getElementById('empty').innerHTML = '<pre style="background:#1e2130;color:#e8eaf0;padding:20px;border-radius:10px;font-size:12px;text-align:left;max-width:700px;">' + dbg + '</pre>';
             document.getElementById('empty').classList.remove('hidden');
@@ -280,6 +335,7 @@ const Parser = {
           document.getElementById('fname').textContent = ' — ' + file.name;
           UI.hideLoading();
           UI.render();
+          MappingUI.updateBadge();
           JBStorage.saveCampaign(file.name, rows);
           document.getElementById('btn-deploy').classList.remove('hidden');
           document.getElementById('btn-deploy-kw').classList.remove('hidden');
@@ -293,4 +349,3 @@ const Parser = {
     reader.readAsArrayBuffer(file);
   },
 };
-
