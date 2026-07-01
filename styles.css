@@ -326,3 +326,23 @@
     .memo-btn { background: none; border: 1px solid transparent; border-radius: 4px; width: 20px; height: 20px; cursor: pointer; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; transition: all .12s; vertical-align: middle; margin-left: 5px; line-height: 1; color: var(--muted); }
     .memo-btn:hover { background: var(--hover); border-color: var(--blue); color: var(--blue); }
     .memo-btn.has-note { border-color: rgba(243,156,18,.5); color: var(--orange); background: rgba(243,156,18,.1); }
+
+    /* ── 분석 탭 ── */
+    .an-page { max-width: 1100px; margin: 0 auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 20px; }
+    .an-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 22px 24px; }
+    .an-card-placeholder { opacity: .45; }
+    .an-card-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    .an-coming { font-size: 11px; font-weight: 400; color: var(--muted); background: var(--hover); padding: 2px 8px; border-radius: 20px; }
+    .an-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+    .an-ctrl-label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+    /* 퍼널 */
+    .funnel-wrap { display: flex; flex-direction: column; }
+    .funnel-row { display: flex; align-items: center; gap: 12px; }
+    .funnel-lbl { width: 50px; font-size: 12px; color: var(--muted); text-align: right; flex-shrink: 0; }
+    .funnel-track { flex: 1; height: 42px; background: var(--hover); border-radius: 8px; overflow: hidden; }
+    .funnel-fill { height: 100%; display: flex; align-items: center; padding: 0 14px; border-radius: 8px; transition: width .6s ease; min-width: 80px; }
+    .funnel-val { font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap; }
+    .funnel-connector { display: flex; align-items: center; gap: 12px; padding: 5px 0 5px 62px; }
+    .funnel-badge { font-size: 12px; }
+    .funnel-drop { font-size: 11px; color: var(--muted); }
