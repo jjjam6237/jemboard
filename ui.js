@@ -10,6 +10,8 @@ const DimState = {
   detect() {
     const preferred = ['media', 'device', 'route', 'campaign', 'weekday', 'routeDetail'];
     this.available = preferred.filter(f => (Store.dims[f]?.length || 0) >= 1);
+    // 새 파일 로드 시 사라진 차원 제거
+    this.active = this.active.filter(f => this.available.includes(f));
     if (!this.active.length) {
       const defaults = ['media', 'device', 'route'].filter(f => this.available.includes(f));
       this.active = defaults.length ? defaults : this.available.slice(0, 3);
@@ -222,9 +224,9 @@ const Ins = {
       const actions = {
         cost_up:  '급격한 광고비 증가가 ROAS 개선으로 이어졌는지 확인하세요. 효율 개선 없이 비용만 늘었다면 예산 재조정이 필요합니다.',
         conv_dn:  '전환 급감 시 ① 전환 추적 오류 → ② 노출/클릭 감소 → ③ 키워드 제외 처리 순으로 점검하세요.',
-        roas_dn:  '매출 단가가 낮은 노선·시즌 키워드를 점검하고, 고단가 노선(일본·동남아) 입찰가 상향을 검토하세요.',
+        roas_dn:  '매출 효율이 낮은 키워드·캠페인을 점검하고, 고효율 영역에 예산을 집중하세요.',
         cpa_up:   '① 저성과 키워드 입찰가 하향 → ② 전환율 낮은 소재 교체 → ③ 경쟁사 광고 집행 현황 확인 순으로 대응하세요.',
-        ctr_dn:   '광고 제목에 출발지·목적지를 직접 명시하고, 특가/최저가 등 즉각적인 혜택 문구를 추가해 클릭률을 높이세요.',
+        ctr_dn:   '광고 소재에 핵심 혜택을 직접 명시하고, 키워드 매칭 타입을 확장→구문→일치 순으로 좁혀 광고 노출 품질을 높이세요.',
       };
       let action = '';
       if (m==='cost'&&pct>20) action=actions.cost_up;
@@ -242,7 +244,7 @@ const Ins = {
     if (L7.ctr > 0) {
       if (L7.ctr < 1.5) {
         out.push({ type:'warn', icon:'🎯',
-          text: `최근 7일 평균 CTR <strong>${L7.ctr.toFixed(2)}%</strong> — 검색광고 평균(2~3%) 대비 낮습니다.<br>${this.a('광고 제목에 출발지·도착지를 직접 명시하고, 키워드 매칭 타입을 확장→구문→일치 순으로 좁혀 광고 노출 품질을 높이세요. 낮은 CTR 키워드는 QS(품질지수) 하락으로 CPC 상승을 유발합니다.')}` });
+          text: `최근 7일 평균 CTR <strong>${L7.ctr.toFixed(2)}%</strong> — 검색광고 평균(2~3%) 대비 낮습니다.<br>${this.a('광고 소재에 핵심 혜택을 직접 명시하고, 키워드 매칭 타입을 확장→구문→일치 순으로 좁혀 광고 노출 품질을 높이세요. 낮은 CTR 키워드는 QS(품질지수) 하락으로 CPC 상승을 유발합니다.')}` });
       } else if (L7.ctr >= 4) {
         out.push({ type:'pos', icon:'🎯',
           text: `최근 7일 평균 CTR <strong>${L7.ctr.toFixed(2)}%</strong> — 높은 클릭률을 기록 중입니다.<br>${this.a('CTR이 높을 때 CVR(전환율)도 함께 확인하세요. CTR 대비 CVR이 낮다면 랜딩 페이지와 키워드 의도가 불일치할 수 있습니다.')}` });
@@ -252,7 +254,7 @@ const Ins = {
     // ③ CVR(전환율) 진단
     if (L7.cvr > 0 && L7.cvr < 1.5) {
       out.push({ type:'warn', icon:'🔄',
-        text: `최근 7일 평균 CVR <strong>${L7.cvr.toFixed(2)}%</strong> — 클릭 대비 전환 효율이 낮습니다.<br>${this.a('① 랜딩 페이지 로딩 속도(3초 초과 시 이탈률 급증) → ② 예약 버튼 가시성 → ③ 검색 키워드와 랜딩 페이지 내용 일치 여부를 순서대로 점검하세요. Mobile CVR이 특히 낮다면 모바일 UX 최적화가 시급합니다.')}` });
+        text: `최근 7일 평균 CVR <strong>${L7.cvr.toFixed(2)}%</strong> — 클릭 대비 전환 효율이 낮습니다.<br>${this.a('① 랜딩 페이지 로딩 속도(3초 초과 시 이탈률 급증) → ② CTA 버튼 가시성 → ③ 검색 키워드와 랜딩 페이지 내용 일치 여부를 순서대로 점검하세요. 모바일 CVR이 특히 낮다면 모바일 UX 최적화가 시급합니다.')}` });
     }
 
     // ④ 매체별 효율 격차 + 예산 배분 제안
@@ -270,30 +272,37 @@ const Ins = {
       }
     }
 
-    // ⑤ 노선별 효율 + 확장/축소 제안
-    const rr = Store.byRoute().filter(r=>r.cost>0);
-    if (rr.length >= 2) {
-      rr.sort((a,b)=>b.roas-a.roas);
-      const top=rr[0], bot=rr[rr.length-1];
-      out.push({ type:'neu', icon:'🗺️',
-        text: `노선 ROAS 최고 <strong>${top.route}</strong> ${fmt('roas',top.roas)} / 최저 <strong>${bot.route}</strong> ${fmt('roas',bot.roas>0?bot.roas:0)}<br>${this.a(`${top.route}은 입찰가 상향 또는 예산 추가 배분을 검토하세요. ${bot.route}은 전환 데이터가 30건 이상이면 키워드 정리·CPC 하향을 진행하고, 미만이면 관찰 기간을 연장한 후 판단하세요.`)}` });
+    // ⑤ 세그먼트별 효율 — 데이터에 있는 첫 번째 카테고리 차원 사용
+    const segField = ['route', 'campaign', 'routeDetail', 'weekday'].find(f => (Store.dims[f]?.length || 0) >= 2);
+    if (segField) {
+      const rr = Store.byDim(segField).filter(r => r.cost > 0);
+      if (rr.length >= 2) {
+        rr.sort((a,b) => b.roas - a.roas);
+        const top=rr[0], bot=rr[rr.length-1];
+        const segLabel = FIELD_SCHEMA[segField]?.label || segField;
+        out.push({ type:'neu', icon:'🗺️',
+          text: `${segLabel} ROAS 최고 <strong>${top[segField]}</strong> ${fmt('roas',top.roas)} / 최저 <strong>${bot[segField]}</strong> ${fmt('roas',bot.roas>0?bot.roas:0)}<br>${this.a(`${top[segField]}에 입찰가 상향 또는 예산 추가 배분을 검토하세요. ${bot[segField]}은 전환 데이터가 충분하면 키워드 정리·CPC 하향을 진행하고, 미만이면 관찰 기간을 연장한 후 판단하세요.`)}` });
+      }
     }
 
-    // ⑥ 디바이스 CPA 격차
-    const devAgg = {};
-    Store.filtered.forEach(r => {
-      if (!devAgg[r.device]) devAgg[r.device] = {cost:0,conv:0,clicks:0,revenue:0};
-      const d=devAgg[r.device]; d.cost+=r.cost; d.conv+=r.conv; d.clicks+=r.clicks; d.revenue+=r.revenue;
-    });
-    const mob=devAgg['Mobile'], pc=devAgg['PC'];
-    if (mob&&pc&&mob.conv>0&&pc.conv>0) {
-      const mCpa=mob.cost/mob.conv, pCpa=pc.cost/pc.conv;
-      const ratio=Math.max(mCpa,pCpa)/Math.min(mCpa,pCpa);
-      if (ratio>1.4) {
-        const better=mCpa<pCpa?'Mobile':'PC', worse=better==='Mobile'?'PC':'Mobile';
-        const bCpa=better==='Mobile'?mCpa:pCpa, wCpa=better==='Mobile'?pCpa:mCpa;
-        out.push({ type:'neu', icon:'📱',
-          text: `디바이스 CPA — Mobile ${fmt('cpa',mCpa)} / PC ${fmt('cpa',pCpa)}<br>${this.a(`${better}(CPA ${fmt('cpa',bCpa)})이 더 효율적입니다. 구글 광고의 디바이스 입찰 조정에서 ${better} 가중치를 +20~30% 높이고, ${worse}(CPA ${fmt('cpa',wCpa)})은 랜딩 페이지 최적화를 우선 검토하세요.`)}` });
+    // ⑥ 디바이스 CPA 격차 — 데이터에 있는 모든 디바이스 비교
+    if ((Store.dims.device?.length || 0) >= 2) {
+      const devAgg = {};
+      Store.filtered.forEach(r => {
+        if (!r.device) return;
+        if (!devAgg[r.device]) devAgg[r.device] = {cost:0,conv:0};
+        devAgg[r.device].cost += r.cost; devAgg[r.device].conv += r.conv;
+      });
+      const devs = Object.entries(devAgg)
+        .filter(([,v]) => v.conv > 0)
+        .map(([name, v]) => ({ name, cpa: v.cost/v.conv }))
+        .sort((a,b) => a.cpa - b.cpa);
+      if (devs.length >= 2) {
+        const best=devs[0], worst=devs[devs.length-1];
+        if (worst.cpa/best.cpa > 1.4) {
+          out.push({ type:'neu', icon:'📱',
+            text: `디바이스 CPA — ${devs.map(d=>`<strong>${d.name}</strong> ${fmt('cpa',d.cpa)}`).join(' / ')}<br>${this.a(`${best.name}(CPA ${fmt('cpa',best.cpa)})이 더 효율적입니다. 디바이스 입찰 조정에서 ${best.name} 가중치를 높이고, ${worst.name}(CPA ${fmt('cpa',worst.cpa)})은 랜딩 페이지 최적화를 우선 검토하세요.`)}` });
+        }
       }
     }
 
@@ -313,10 +322,10 @@ const Ins = {
           text: `최근 7일 ROAS <strong>${L7.roas.toFixed(2)}</strong> — 광고비 대비 전환 매출 적자 상태입니다.<br>${this.a('즉시 ROAS 하위 20% 캠페인 예산 삭감 후 상위 캠페인에 재배분하세요. 전환 매출 데이터가 충분하면 타겟 ROAS 자동 입찰로 전환하고, 목표 ROAS를 현실적인 수준(150~200%)에서 시작하세요.')}` });
       } else if (L7.roas < 2) {
         out.push({ type:'warn', icon:'📊',
-          text: `최근 7일 ROAS <strong>${L7.roas.toFixed(2)}</strong> — 광고비 회수는 되나 수익 마진이 낮습니다.<br>${this.a('고단가 노선(일본·동남아·대양주) 키워드 강화, 경쟁이 적은 롱테일 키워드(출발지+도착지+날짜) 발굴로 CPC를 낮추고 ROAS를 개선하세요.')}` });
+          text: `최근 7일 ROAS <strong>${L7.roas.toFixed(2)}</strong> — 광고비 회수는 되나 수익 마진이 낮습니다.<br>${this.a('고효율 키워드·캠페인에 예산을 집중하고, 경쟁이 적은 롱테일 키워드 발굴로 CPC를 낮추고 ROAS를 개선하세요.')}` });
       } else if (L7.roas >= 3) {
         out.push({ type:'pos', icon:'✨',
-          text: `최근 7일 ROAS <strong>${L7.roas.toFixed(2)}</strong> — 광고 효율이 우수합니다.<br>${this.a('효율이 좋을 때 예산을 적극 확대해 점유율을 높이세요. ROAS 상위 캠페인·노선 키워드의 노출 순위를 1~2위로 올리는 입찰 조정을 검토하세요.')}` });
+          text: `최근 7일 ROAS <strong>${L7.roas.toFixed(2)}</strong> — 광고 효율이 우수합니다.<br>${this.a('효율이 좋을 때 예산을 적극 확대해 점유율을 높이세요. ROAS 상위 캠페인·키워드의 노출 순위를 1~2위로 올리는 입찰 조정을 검토하세요.')}` });
       }
     }
 
@@ -347,7 +356,7 @@ const Ins = {
           : `<span class="anomaly-tag anomaly-dn">${dev.toFixed(0)}%</span>`;
         out.push({
           type: isGood ? 'pos' : 'neg', icon: '🔍',
-          text: `이상치 감지 — <strong>${label}</strong> ${tag} 7일 평균(${fmt(m,avg)}) 대비 오늘(${last.date}) <strong>${fmt(m,todayVal)}</strong><br>${this.a(isGood ? `${label} 급등 원인(프로모션·시즌 등)을 파악하고, 동일 조건을 유지하거나 성공 요인을 다른 매체·노선에 적용하세요.` : `${label} 급락 원인을 긴급 점검하세요. 광고 소재 피로도, 예산 소진, 경쟁 강도 변화 여부를 확인하세요.`)}`,
+          text: `이상치 감지 — <strong>${label}</strong> ${tag} 7일 평균(${fmt(m,avg)}) 대비 오늘(${last.date}) <strong>${fmt(m,todayVal)}</strong><br>${this.a(isGood ? `${label} 급등 원인(프로모션·시즌 등)을 파악하고, 동일 조건을 유지하거나 성공 요인을 다른 매체·캠페인에 적용하세요.` : `${label} 급락 원인을 긴급 점검하세요. 광고 소재 피로도, 예산 소진, 경쟁 강도 변화 여부를 확인하세요.`)}`,
         });
       });
     }
@@ -359,10 +368,6 @@ const Ins = {
 
 // ── UI ────────────────────────────────────────────────────────────────────────
 const UI = {
-  activeDevices: [],
-  activeMedias: [],
-  activeRoutes: [],
-
   render() {
     document.getElementById('empty').classList.add('hidden');
     document.getElementById('main').classList.remove('hidden');
@@ -1154,25 +1159,29 @@ function switchTab(tab) {
 const KWStore = {
   // raw: { keyword, media, route, device, daily: {'YYYY-MM-DD': {impr,clicks,cost,conv,revenue}} }
   raw: [], filtered: [],
-  medias: [], routes: [], devices: [], allDates: [],
-  activeMedias: [], activeRoutes: [], activeDevices: [],
+  dims: {}, dimFilters: {}, allDates: [],
   dateFrom: null, dateTo: null,
   sortKey: 'cost', sortDir: -1,
   search: '', page: 1, perPage: 50,
+
+  _detectDims(rows) {
+    const dimFields = ['media', 'route', 'device'];
+    this.dims = {};
+    dimFields.forEach(f => {
+      const vals = [...new Set(rows.map(r => r[f]).filter(Boolean))].sort();
+      if (vals.length >= 1) this.dims[f] = vals;
+    });
+    this.dimFilters = {};
+  },
 
   load(rawMap) {
     this.raw = Object.values(rawMap);
     const dateSet = new Set();
     this.raw.forEach(r => Object.keys(r.daily||{}).forEach(d => dateSet.add(d)));
-    this.allDates  = [...dateSet].sort();
-    this.dateFrom  = this.allDates[0] || null;
-    this.dateTo    = this.allDates[this.allDates.length-1] || null;
-    this.medias    = [...new Set(this.raw.map(r=>r.media))].sort();
-    this.routes    = [...new Set(this.raw.map(r=>r.route).filter(Boolean))].sort();
-    this.devices   = [...new Set(this.raw.map(r=>r.device).filter(Boolean))].sort();
-    this.activeMedias  = [...this.medias];
-    this.activeRoutes  = [...this.routes];
-    this.activeDevices = [...this.devices];
+    this.allDates = [...dateSet].sort();
+    this.dateFrom = this.allDates[0] || null;
+    this.dateTo   = this.allDates[this.allDates.length-1] || null;
+    this._detectDims(this.raw);
     this.applyFilter();
   },
 
@@ -1184,12 +1193,7 @@ const KWStore = {
     this.allDates = [];
     this.dateFrom = dateFrom || null;
     this.dateTo   = dateTo   || null;
-    this.medias  = [...new Set(rows.map(r=>r.media))].sort();
-    this.routes  = [...new Set(rows.map(r=>r.route).filter(Boolean))].sort();
-    this.devices = [...new Set(rows.map(r=>r.device).filter(Boolean))].sort();
-    this.activeMedias  = [...this.medias];
-    this.activeRoutes  = [...this.routes];
-    this.activeDevices = [...this.devices];
+    this._detectDims(rows);
     this.applyFilter();
   },
 
@@ -1210,12 +1214,14 @@ const KWStore = {
   applyFilter() {
     const q = this.search.toLowerCase();
     this.filtered = this.raw
-      .filter(r =>
-        this.activeMedias.includes(r.media) &&
-        (this.activeRoutes.includes(r.route) || !r.route) &&
-        this.activeDevices.includes(r.device) &&
-        (!q || r.keyword.toLowerCase().includes(q))
-      )
+      .filter(r => {
+        for (const [field, vals] of Object.entries(this.dimFilters)) {
+          if (!vals?.length) continue;
+          const rv = r[field] || '';
+          if (rv && !vals.includes(rv)) return false;
+        }
+        return !q || r.keyword.toLowerCase().includes(q);
+      })
       .map(r => this._isAggregated ? r : this._agg(r))
       .filter(r => r.impr > 0 || r.cost > 0);
     this.filtered.sort((a,b) => {
@@ -1381,30 +1387,39 @@ const KWUI = {
   renderFilters() {
     const dates = KWStore.allDates || [];
     const minD = dates[0]||'', maxD = dates[dates.length-1]||'';
+    const KW_DIM_LABELS = { media:'매체', route:'분류', device:'디바이스' };
+    const MEDIA_DOTS = { '네이버':'#03c75a','구글':'#4285f4','카카오':'#f7c600','당근':'#ff6f00' };
     const refresh = () => {
       const { from, to } = DP.getRange('dp-keyword');
       KWStore.dateFrom = from; KWStore.dateTo = to;
-      KWStore.activeMedias  = MS.getSelected('ms-kw-media');
-      KWStore.activeRoutes  = MS.getSelected('ms-kw-route');
-      KWStore.activeDevices = MS.getSelected('ms-kw-device');
+      Object.keys(KWStore.dims).forEach(f => {
+        KWStore.dimFilters[f] = MS.getSelected(`ms-kw-${f}`);
+      });
       KWStore.applyFilter();
       this._convShowCount = {};
       this.renderKPIs(); this.renderConvKeywords(); this.renderGrade(); KWCh.renderAll(); this.renderTable();
     };
-    const MDOTS = { '네이버':'#03c75a','구글':'#4285f4','카카오':'#f7c600','당근':'#ff6f00' };
     const defFrom = '2026-04-28' >= minD && '2026-04-28' <= maxD ? '2026-04-28' : minD;
     const defTo   = '2026-04-29' >= minD && '2026-04-29' <= maxD ? '2026-04-29' : maxD;
     DP.create('dp-keyword', { minDate: minD, maxDate: maxD, from: defFrom, to: defTo, onChange: refresh });
-    MS.create('ms-kw-media',  { label:'매체',   options: KWStore.medias,  dots: MDOTS,          onChange: refresh });
-    MS.create('ms-kw-route',  { label:'노선',   options: KWStore.routes,                         onChange: refresh });
-    MS.create('ms-kw-device', { label:'디바이스', options: KWStore.devices,                       onChange: refresh });
 
-    // 초기 렌더 시 기본 날짜 범위를 즉시 필터에 반영
+    const container = document.getElementById('kw-dim-filters');
+    if (container) {
+      container.innerHTML = Object.keys(KWStore.dims).map(f => `<div id="ms-kw-${f}" class="ms-wrap"></div>`).join('');
+      Object.entries(KWStore.dims).forEach(([f, vals]) => {
+        MS.create(`ms-kw-${f}`, {
+          label: KW_DIM_LABELS[f] || f,
+          options: vals,
+          dots: f === 'media' ? MEDIA_DOTS : {},
+          onChange: refresh,
+        });
+      });
+    }
+
+    // 초기 날짜 범위 반영
     KWStore.dateFrom = defFrom;
     KWStore.dateTo   = defTo;
-    KWStore.activeMedias  = [...KWStore.medias];
-    KWStore.activeRoutes  = [...KWStore.routes];
-    KWStore.activeDevices = [...KWStore.devices];
+    KWStore.dimFilters = {};
     KWStore.applyFilter();
   },
 
@@ -2049,14 +2064,18 @@ const MappingUI = {
 
 // ── GitHub 배포 ────────────────────────────────────────────────────────────────
 const Deployer = {
-  OWNER: 'jjjam6237',
-  REPO:  'jemboard',
-  PAT_KEY: 'jb_admin_pat',
+  REPO_KEY: 'jb_repo_settings',
+  PAT_KEY:  'jb_admin_pat',
+
+  get OWNER() { return this._cfg().owner || 'jjjam6237'; },
+  get REPO()  { return this._cfg().repo  || 'jemboard'; },
+  _cfg() { try { return JSON.parse(localStorage.getItem(this.REPO_KEY) || '{}'); } catch(e) { return {}; } },
 
   open() {
     const stored = localStorage.getItem(this.PAT_KEY);
-    const input = document.getElementById('deploy-pat-input');
-    if (stored) input.value = stored;
+    if (stored) document.getElementById('deploy-pat-input').value = stored;
+    document.getElementById('deploy-owner-input').value = this.OWNER;
+    document.getElementById('deploy-repo-input').value  = this.REPO;
     document.getElementById('m-deploy').classList.remove('hidden');
     document.getElementById('deploy-progress').classList.add('hidden');
     document.getElementById('deploy-actions').classList.remove('hidden');
@@ -2066,8 +2085,12 @@ const Deployer = {
   close() { document.getElementById('m-deploy').classList.add('hidden'); },
 
   async deploy() {
-    const pat = document.getElementById('deploy-pat-input').value.trim();
-    if (!pat) { alert('토큰을 입력해주세요.'); return; }
+    const pat   = document.getElementById('deploy-pat-input').value.trim();
+    const owner = document.getElementById('deploy-owner-input').value.trim();
+    const repo  = document.getElementById('deploy-repo-input').value.trim();
+    if (!owner || !repo) { alert('Owner와 Repository를 입력해주세요.'); return; }
+    if (!pat) { alert('GitHub 토큰을 입력해주세요.'); return; }
+    localStorage.setItem(this.REPO_KEY, JSON.stringify({ owner, repo }));
     if (document.getElementById('deploy-remember').checked) {
       localStorage.setItem(this.PAT_KEY, pat);
     }
