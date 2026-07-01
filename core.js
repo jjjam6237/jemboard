@@ -178,34 +178,37 @@ function accumulate(agg, r) {
 // ── STORE ─────────────────────────────────────────────────────────────────────
 const Store = {
   raw: [], filtered: [],
-  devices: [], medias: [], routes: [],
+  dims: {},  // { fieldKey: sortedUniqueValues[] }
 
   load(rows) {
     this.raw = rows;
-    this.devices = [...new Set(rows.map(r => r.device).filter(Boolean))].sort();
-    this.medias  = [...new Set(rows.map(r => r.media).filter(Boolean))].sort();
-    this.routes  = [...new Set(rows.map(r => r.route).filter(Boolean))].sort();
+    const dimFields = ['media', 'device', 'route', 'campaign', 'weekday', 'routeDetail'];
+    this.dims = {};
+    dimFields.forEach(f => {
+      const vals = [...new Set(rows.map(r => r[f]).filter(Boolean))].sort();
+      if (vals.length >= 1) this.dims[f] = vals;
+    });
     this.filtered = [...rows];
   },
 
-  filter({ from, to, devices, medias, routes }) {
+  filter({ from, to, dimFilters = {} }) {
     this.filtered = this.raw.filter(r => {
       if (from && r.date < from) return false;
       if (to   && r.date > to)   return false;
-      if (devices?.length && !devices.includes(r.device)) return false;
-      if (medias?.length  && !medias.includes(r.media))   return false;
-      if (routes?.length  && !routes.includes(r.route))   return false;
+      for (const [field, vals] of Object.entries(dimFilters)) {
+        if (vals?.length && !vals.includes(r[field])) return false;
+      }
       return true;
     });
   },
 
-  getAggForPeriod(from, to, devices, medias, routes) {
+  getAggForPeriod(from, to, dimFilters = {}) {
     const rows = this.raw.filter(r => {
       if (from && r.date < from) return false;
       if (to   && r.date > to)   return false;
-      if (devices?.length && !devices.includes(r.device)) return false;
-      if (medias?.length  && !medias.includes(r.media))   return false;
-      if (routes?.length  && !routes.includes(r.route))   return false;
+      for (const [field, vals] of Object.entries(dimFilters)) {
+        if (vals?.length && !vals.includes(r[field])) return false;
+      }
       return true;
     });
     const agg = emptyAgg('');
@@ -222,43 +225,30 @@ const Store = {
     return Object.values(m).sort((a,b)=>a.date>b.date?1:-1).map(derived);
   },
 
-  byMedia() {
+  byDim(field) {
     const m = {};
     this.filtered.forEach(r => {
-      if (!m[r.media]) m[r.media] = { ...emptyAgg(r.media), media: r.media };
-      accumulate(m[r.media], r);
+      const k = r[field] || '';
+      if (!m[k]) m[k] = { ...emptyAgg(k), [field]: k };
+      accumulate(m[k], r);
     });
     return Object.values(m).map(d => { derived(d); return d; });
   },
 
-  byRoute() {
+  byDateDim(field) {
     const m = {};
     this.filtered.forEach(r => {
-      if (!m[r.route]) m[r.route] = { ...emptyAgg(r.route), route: r.route };
-      accumulate(m[r.route], r);
-    });
-    return Object.values(m).map(d => { derived(d); return d; });
-  },
-
-  byDateMedia() {
-    const m = {};
-    this.filtered.forEach(r => {
-      const k = `${r.date}__${r.media}`;
-      if (!m[k]) m[k] = { ...emptyAgg(r.date), media: r.media };
+      const k = `${r.date}__${r[field] || ''}`;
+      if (!m[k]) m[k] = { ...emptyAgg(r.date), [field]: r[field] || '' };
       accumulate(m[k], r);
     });
     return Object.values(m).map(derived);
   },
 
-  byDateDevice() {
-    const m = {};
-    this.filtered.forEach(r => {
-      const k = `${r.date}__${r.device}`;
-      if (!m[k]) m[k] = { ...emptyAgg(r.date), device: r.device };
-      accumulate(m[k], r);
-    });
-    return Object.values(m).map(derived);
-  },
+  byMedia()     { return this.byDim('media'); },
+  byRoute()     { return this.byDim('route'); },
+  byDateMedia() { return this.byDateDim('media'); },
+  byDateDevice(){ return this.byDateDim('device'); },
 
   exportCSV() {
     const bd = this.byDate();

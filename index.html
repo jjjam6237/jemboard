@@ -62,11 +62,7 @@
     </div>
     <div class="sb-section">
       <div class="sb-label">필터</div>
-      <div style="display:flex;flex-direction:column;gap:6px;">
-        <div id="ms-c-device" class="ms-wrap"></div>
-        <div id="ms-c-media"  class="ms-wrap"></div>
-        <div id="ms-c-route"  class="ms-wrap"></div>
-      </div>
+      <div id="dim-filters" style="display:flex;flex-direction:column;gap:6px;"></div>
     </div>
     <div class="sb-section">
       <div class="sb-label">바로가기</div>
@@ -76,9 +72,7 @@
         <div class="nav-item" onclick="scrollToSection('card-week-cmp')"><span class="nav-dot"></span>주차별 비교</div>
         <div class="nav-item" onclick="scrollToSection('card-month-cmp')"><span class="nav-dot"></span>전월 비교</div>
         <div class="nav-item" onclick="scrollToSection('card-trend')"><span class="nav-dot"></span>일별 추이</div>
-        <div class="nav-item" onclick="scrollToSection('card-media')"><span class="nav-dot"></span>매체별 성과</div>
-        <div class="nav-item" onclick="scrollToSection('card-route')"><span class="nav-dot"></span>대노선별 성과</div>
-        <div class="nav-item" onclick="scrollToSection('card-device')"><span class="nav-dot"></span>디바이스별</div>
+        <div id="dim-nav"></div>
         <div class="nav-item" onclick="scrollToSection('card-dod')"><span class="nav-dot"></span>DoD 변화율</div>
         <div class="nav-item" onclick="scrollToSection('card-insights')"><span class="nav-dot"></span>인사이트</div>
         <div class="nav-item admin-btn" onclick="scrollToSection('card-notes')"><span class="nav-dot"></span>리포트 총평</div>
@@ -145,40 +139,7 @@
         <div class="chart-body"><div class="chart-box tall"><canvas id="c-trend"></canvas></div></div>
       </div>
 
-      <!-- 매체별 비교 -->
-      <div class="chart-card collapsible" id="card-media">
-        <div class="card-title-row">
-          <div class="title-left">📡 매체별 성과</div>
-          <div class="title-right">
-            <div class="metric-tabs" id="media-tabs"></div>
-            <button class="collapse-btn" onclick="UI.toggleCard('card-media')">−</button>
-          </div>
-        </div>
-        <div class="chart-body"><div class="chart-box"><canvas id="c-media"></canvas></div></div>
-      </div>
-
-      <!-- 대노선별 성과 -->
-      <div class="chart-card collapsible" id="card-route">
-        <div class="card-title-row">
-          <div class="title-left">🗺️ 대노선별 성과</div>
-          <div class="title-right">
-            <div class="metric-tabs" id="route-tabs"></div>
-            <button class="collapse-btn" onclick="UI.toggleCard('card-route')">−</button>
-          </div>
-        </div>
-        <div class="chart-body"><div class="chart-box"><canvas id="c-route"></canvas></div></div>
-      </div>
-
-      <!-- 디바이스 비교 -->
-      <div class="chart-card collapsible" id="card-device">
-        <div class="card-title-row">
-          <div class="title-left">📱 디바이스별 광고비 (최근 14일)</div>
-          <div class="title-right">
-            <button class="collapse-btn" onclick="UI.toggleCard('card-device')">−</button>
-          </div>
-        </div>
-        <div class="chart-body"><div class="chart-box"><canvas id="c-device"></canvas></div></div>
-      </div>
+      <div id="dim-charts" style="display:contents;"></div>
 
       <!-- 전일 대비 변화율 -->
       <div class="chart-card collapsible" id="card-dod">

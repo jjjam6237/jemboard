@@ -1,7 +1,65 @@
+// ── 차원 상태 ──────────────────────────────────────────────────────────────────
+const _dimIcons  = { media:'📡', device:'📱', route:'🗺️', campaign:'🏷️', weekday:'📅', routeDetail:'🔖' };
+const _dimLabels = { media:'매체', device:'디바이스', route:'분류', campaign:'캠페인', weekday:'요일', routeDetail:'분류상세' };
+
+const DimState = {
+  available: [],
+  active: [],
+  _metrics: {},
+
+  detect() {
+    const preferred = ['media', 'device', 'route', 'campaign', 'weekday', 'routeDetail'];
+    this.available = preferred.filter(f => (Store.dims[f]?.length || 0) >= 1);
+    if (!this.active.length) {
+      const defaults = ['media', 'device', 'route'].filter(f => this.available.includes(f));
+      this.active = defaults.length ? defaults : this.available.slice(0, 3);
+      this.active.forEach(f => { if (!this._metrics[f]) this._metrics[f] = 'cost'; });
+    }
+  },
+
+  add(field) {
+    if (!this.active.includes(field)) {
+      this.active.push(field);
+      if (!this._metrics[field]) this._metrics[field] = 'cost';
+    }
+    UI._renderDimFilters();
+    CH.renderDims();
+  },
+
+  remove(field) {
+    this.active = this.active.filter(f => f !== field);
+    UI._renderDimFilters();
+    UI.applyFilter();
+  },
+
+  getMsId(field)   { return `ms-dim-${field}`; },
+  getCardId(field) { return `card-dim-${field}`; },
+  getTabsId(field) { return `dim-tabs-${field}`; },
+  getLabel(field)  { return _dimLabels[field] || field; },
+
+  getFilters() {
+    const out = {};
+    this.active.forEach(f => {
+      const sel = MS.getSelected(this.getMsId(f));
+      if (sel?.length) out[f] = sel;
+    });
+    return out;
+  },
+
+  getMetric(field)    { return this._metrics[field] || 'cost'; },
+  setMetric(field, m) {
+    this._metrics[field] = m;
+    document.querySelectorAll(`#${this.getTabsId(field)} .mtab`).forEach(t => {
+      t.classList.toggle('on', t.textContent === (METRICS[m]?.label || m));
+    });
+    CH.renderDim(field);
+  },
+};
+
 // ── CHARTS ────────────────────────────────────────────────────────────────────
 const CH = {
-  trend: null, media: null, route: null, device: null, dod: null,
-  trendMetric: 'cost', mediaMetric: 'cost', routeMetric: 'cost', dodMetric: 'cost',
+  trend: null, dod: null, dimCharts: {},
+  trendMetric: 'cost', dodMetric: 'cost',
 
   co(extra={}) {
     return {
@@ -17,9 +75,7 @@ const CH = {
   renderAll() {
     const bd = Store.byDate();
     this.renderTrend(bd);
-    this.renderMedia();
-    this.renderRoute();
-    this.renderDevice(bd);
+    this.renderDims();
     this.renderDoD(bd);
   },
 
@@ -35,69 +91,77 @@ const CH = {
     });
   },
 
-  renderMedia() {
-    const m = this.mediaMetric;
-    const all = Store.byDateMedia();
-    const medias = [...new Set(all.map(r=>r.media))].sort();
-    const dates  = [...new Set(all.map(r=>r.date))].sort().slice(-14);
-    const byKey  = {};
-    all.forEach(r => { byKey[`${r.date}__${r.media}`] = r; });
-    const datasets = medias.map(media => ({
-      label: media,
-      data: dates.map(d => (byKey[`${d}__${media}`]?.[m] || 0)),
-      backgroundColor: getDimColor(media) + 'aa',
-      borderColor: getDimColor(media),
-      borderWidth: 1, borderRadius: 3,
-    }));
-    if (this.media) this.media.destroy();
-    this.media = new Chart(document.getElementById('c-media'), {
-      type: 'bar',
-      data: { labels: dates.map(d=>d.slice(5)), datasets },
-      options: this.co({ plugins: { legend: { labels:{color:'#8b90a0',font:{size:10},boxWidth:10} }, tooltip:{mode:'index',intersect:false} } }),
-    });
+  renderDims() {
+    const container = document.getElementById('dim-charts');
+    const navEl = document.getElementById('dim-nav');
+    if (!container) return;
+    if (navEl) {
+      navEl.innerHTML = DimState.active.map(f =>
+        `<div class="nav-item" onclick="scrollToSection('${DimState.getCardId(f)}')"><span class="nav-dot"></span>${DimState.getLabel(f)}별 성과</div>`
+      ).join('');
+    }
+    Object.values(this.dimCharts).forEach(c => c?.destroy());
+    this.dimCharts = {};
+    const mainMetrics = ['cost','impr','clicks','conv','revenue','ctr','cpc','cpa','roas'];
+    const tabHtml = (field) => mainMetrics.map(m =>
+      `<span class="mtab${m===DimState.getMetric(field)?' on':''}" onclick="DimState.setMetric('${field}','${m}')">${METRICS[m]?.label||m}</span>`
+    ).join('');
+    container.innerHTML = DimState.active.map(f => {
+      const nVals = Store.dims[f]?.length || 0;
+      return `<div class="chart-card collapsible" id="${DimState.getCardId(f)}">
+        <div class="card-title-row">
+          <div class="title-left">${_dimIcons[f]||'📊'} ${DimState.getLabel(f)}별 성과</div>
+          <div class="title-right">
+            <div class="metric-tabs" id="${DimState.getTabsId(f)}">${tabHtml(f)}</div>
+            <button class="collapse-btn" onclick="UI.toggleCard('${DimState.getCardId(f)}')">−</button>
+          </div>
+        </div>
+        <div class="chart-body"><div class="chart-box${nVals<=6?' tall':''}"><canvas id="c-dim-${f}"></canvas></div></div>
+      </div>`;
+    }).join('');
+    DimState.active.forEach(f => this.renderDim(f));
   },
 
-  renderRoute() {
-    const m = this.routeMetric;
-    const rd = Store.byRoute().sort((a,b) => (b[m]||0)-(a[m]||0));
-    const labels = rd.map(r=>r.route);
-    const data   = rd.map(r=>r[m]||0);
-    const bgColors = labels.map(l => getDimColor(l) + 'cc');
-    if (this.route) this.route.destroy();
-    this.route = new Chart(document.getElementById('c-route'), {
-      type: 'bar',
-      data: { labels, datasets: [{ label: METRICS[m]?.label||m, data, backgroundColor: bgColors, borderWidth:0, borderRadius:4 }] },
-      options: this.co({
-        indexAxis: 'y',
-        plugins: { legend:{display:false}, tooltip:{intersect:false} },
-        scales: {
-          x: { ticks:{color:'#8b90a0',font:{size:10}}, grid:{color:'#2a2d3e'} },
-          y: { ticks:{color:'#8b90a0',font:{size:10}}, grid:{display:false} },
-        },
-      }),
-    });
-  },
-
-  renderDevice(bd) {
-    const recent = bd.slice(-14);
-    const allDd  = Store.byDateDevice();
-    const dates  = recent.map(r=>r.date);
-    const byKey  = {};
-    allDd.forEach(r => { byKey[`${r.date}__${r.device}`] = r; });
-    const devices  = Store.devices;
-    const datasets = devices.map(dev => ({
-      label: dev,
-      data: dates.map(d => (byKey[`${d}__${dev}`]?.cost || 0)),
-      backgroundColor: getDimColor(dev) + 'aa',
-      borderColor: getDimColor(dev),
-      borderWidth:1, borderRadius:3,
-    }));
-    if (this.device) this.device.destroy();
-    this.device = new Chart(document.getElementById('c-device'), {
-      type: 'bar',
-      data: { labels: dates.map(d=>d.slice(5)), datasets },
-      options: this.co({ plugins:{legend:{labels:{color:'#8b90a0',font:{size:10},boxWidth:10}},tooltip:{mode:'index',intersect:false}} }),
-    });
+  renderDim(field) {
+    const m = DimState.getMetric(field);
+    const vals = Store.dims[field] || [];
+    const canvasEl = document.getElementById(`c-dim-${field}`);
+    if (!canvasEl) return;
+    if (this.dimCharts[field]) { this.dimCharts[field].destroy(); delete this.dimCharts[field]; }
+    if (vals.length <= 6) {
+      const all = Store.byDateDim(field);
+      const dates = [...new Set(all.map(r => r.date))].sort().slice(-14);
+      const byKey = {};
+      all.forEach(r => { byKey[`${r.date}__${r[field]}`] = r; });
+      const datasets = vals.map(v => ({
+        label: v,
+        data: dates.map(d => byKey[`${d}__${v}`]?.[m] || 0),
+        backgroundColor: getDimColor(v) + 'aa',
+        borderColor: getDimColor(v),
+        borderWidth: 1, borderRadius: 3,
+      }));
+      this.dimCharts[field] = new Chart(canvasEl, {
+        type: 'bar',
+        data: { labels: dates.map(d => d.slice(5)), datasets },
+        options: this.co({ plugins: { legend:{labels:{color:'#8b90a0',font:{size:10},boxWidth:10}}, tooltip:{mode:'index',intersect:false} } }),
+      });
+    } else {
+      const agg = Store.byDim(field).sort((a,b) => (b[m]||0)-(a[m]||0));
+      const labels = agg.map(r => r[field]);
+      const data   = agg.map(r => r[m] || 0);
+      this.dimCharts[field] = new Chart(canvasEl, {
+        type: 'bar',
+        data: { labels, datasets: [{ label: METRICS[m]?.label||m, data, backgroundColor: labels.map(l => getDimColor(l)+'cc'), borderWidth:0, borderRadius:4 }] },
+        options: this.co({
+          indexAxis: 'y',
+          plugins: { legend:{display:false}, tooltip:{intersect:false} },
+          scales: {
+            x: { ticks:{color:'#8b90a0',font:{size:10}}, grid:{color:'#2a2d3e'} },
+            y: { ticks:{color:'#8b90a0',font:{size:10}}, grid:{display:false} },
+          },
+        }),
+      });
+    }
   },
 
   renderDoD(bd) {
@@ -328,16 +392,14 @@ const UI = {
       onChange: () => this.applyFilter(),
     });
 
-    // 드롭다운 필터
-    const makeDots = (values) => Object.fromEntries(values.map(v => [v, getDimColor(v)]));
-    MS.create('ms-c-device', { label:'디바이스', options: Store.devices, dots: makeDots(Store.devices), onChange: () => this.applyFilter() });
-    MS.create('ms-c-media',  { label:'매체',     options: Store.medias,  dots: makeDots(Store.medias),  onChange: () => this.applyFilter() });
-    MS.create('ms-c-route',  { label:'분류',     options: Store.routes,  dots: makeDots(Store.routes),  onChange: () => this.applyFilter() });
+    // 차원 필터
+    if (!DimState.active.length) DimState.detect();
+    this._renderDimFilters();
   },
 
   applyFilter() {
     const { from, to } = DP.getRange('dp-campaign');
-    Store.filter({ from, to, devices: MS.getSelected('ms-c-device'), medias: MS.getSelected('ms-c-media'), routes: MS.getSelected('ms-c-route') });
+    Store.filter({ from, to, dimFilters: DimState.getFilters() });
     this.renderKPIs();
     this.renderPacing();
     this.renderWeekCompare();
@@ -378,9 +440,9 @@ const UI = {
         const days = Math.round((ms(to) - ms(from)) / 86400000) + 1;
         const prevTo   = new Date(ms(from) - 86400000).toISOString().slice(0,10);
         const prevFrom = new Date(ms(from) - days * 86400000).toISOString().slice(0,10);
-        const d = MS.getSelected('ms-c-device'), me = MS.getSelected('ms-c-media'), r = MS.getSelected('ms-c-route');
-        const curr = Store.getAggForPeriod(from, to, d, me, r);
-        cmpAgg = { curr, prev: Store.getAggForPeriod(prevFrom, prevTo, d, me, r), prevFrom, prevTo };
+        const dimFilters = DimState.getFilters();
+        const curr = Store.getAggForPeriod(from, to, dimFilters);
+        cmpAgg = { curr, prev: Store.getAggForPeriod(prevFrom, prevTo, dimFilters), prevFrom, prevTo };
       }
     }
 
@@ -600,12 +662,10 @@ const UI = {
 
   renderTabs() {
     const mainMetrics = ['cost','impr','clicks','conv','revenue','ctr','cpc','cpa','roas'];
-    const tabHtml = (id, active, handler) =>
+    const tabHtml = (active, handler) =>
       mainMetrics.map(m => `<span class="mtab${m===active?' on':''}" onclick="${handler}('${m}',this)">${METRICS[m]?.label||m}</span>`).join('');
-    document.getElementById('trend-tabs').innerHTML  = tabHtml('trend-tabs','cost','UI.setTrendMetric');
-    document.getElementById('media-tabs').innerHTML  = tabHtml('media-tabs','cost','UI.setMediaMetric');
-    document.getElementById('route-tabs').innerHTML  = tabHtml('route-tabs','cost','UI.setRouteMetric');
-    document.getElementById('dod-tabs').innerHTML    = tabHtml('dod-tabs','cost','UI.setDodMetric');
+    document.getElementById('trend-tabs').innerHTML = tabHtml('cost', 'UI.setTrendMetric');
+    document.getElementById('dod-tabs').innerHTML   = tabHtml('cost', 'UI.setDodMetric');
   },
 
   setTabActive(tabsId, m) {
@@ -613,9 +673,32 @@ const UI = {
   },
 
   setTrendMetric(m,el) { CH.trendMetric=m; CH.renderTrend(Store.byDate()); document.querySelectorAll('#trend-tabs .mtab').forEach(t=>t.classList.toggle('on',t===el)); },
-  setMediaMetric(m,el) { CH.mediaMetric=m; CH.renderMedia(); document.querySelectorAll('#media-tabs .mtab').forEach(t=>t.classList.toggle('on',t===el)); },
-  setRouteMetric(m,el) { CH.routeMetric=m; CH.renderRoute(); document.querySelectorAll('#route-tabs .mtab').forEach(t=>t.classList.toggle('on',t===el)); },
   setDodMetric(m,el)   { CH.dodMetric=m;   CH.renderDoD(Store.byDate()); document.querySelectorAll('#dod-tabs .mtab').forEach(t=>t.classList.toggle('on',t===el)); },
+
+  _renderDimFilters() {
+    const container = document.getElementById('dim-filters');
+    if (!container) return;
+    const makeDots = vals => Object.fromEntries(vals.map(v => [v, getDimColor(v)]));
+    container.innerHTML = DimState.active.map(f =>
+      `<div id="${DimState.getMsId(f)}" class="ms-wrap"></div>`
+    ).join('');
+    DimState.active.forEach(f => {
+      const vals = Store.dims[f] || [];
+      MS.create(DimState.getMsId(f), {
+        label: DimState.getLabel(f),
+        options: vals,
+        dots: makeDots(vals),
+        onChange: () => UI.applyFilter(),
+      });
+    });
+    const unused = DimState.available.filter(f => !DimState.active.includes(f));
+    if (unused.length) {
+      const btns = unused.map(f =>
+        `<button class="btn btn-secondary btn-sm" style="font-size:10px;padding:3px 8px;" onclick="DimState.add('${f}')">${DimState.getLabel(f)} +</button>`
+      ).join('');
+      container.insertAdjacentHTML('beforeend', `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;">${btns}</div>`);
+    }
+  },
 
   renderInsights() {
     document.getElementById('ins-list').innerHTML = Ins.gen().map(i =>
