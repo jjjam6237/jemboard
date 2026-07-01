@@ -22,6 +22,7 @@
   <div class="tab-bar">
     <button class="tab-btn active" id="tab-campaign" onclick="switchTab('campaign')">📊 캠페인 개요</button>
     <button class="tab-btn" id="tab-keyword" onclick="switchTab('keyword')">🔑 키워드 분석</button>
+    <button class="tab-btn" id="tab-analysis" onclick="switchTab('analysis')">📈 분석</button>
   </div>
   <div class="header-right" id="hdr-campaign">
     <span class="file-name" id="data-range" style="display:none;"></span>
@@ -31,6 +32,9 @@
     <button class="btn btn-secondary btn-sm hidden admin-btn" id="btn-reset" onclick="JBStorage.clearAll()" style="color:var(--red);">× 초기화</button>
     <button class="btn btn-secondary btn-sm hidden admin-btn" id="btn-deploy" onclick="Deployer.open()" style="color:#a78bfa;border-color:#7c3aed33;">🚀 배포하기</button>
     <button class="btn btn-primary btn-sm admin-btn" onclick="UI.showUpload()">📁 리포트 업로드</button>
+  </div>
+  <div class="header-right hidden" id="hdr-analysis" style="pointer-events:none;">
+    <span style="font-size:12px;color:var(--muted);">캠페인 탭에서 데이터 업로드 후 사용하세요</span>
   </div>
   <div class="header-right hidden" id="hdr-keyword">
     <span class="file-name" id="kw-data-range" style="display:none;"></span>
@@ -308,6 +312,46 @@
     </div><!-- /kw-layout -->
   </div><!-- /kw-main -->
 </div><!-- /page-keyword -->
+
+<!-- ══ 분석 탭 ══ -->
+<div id="page-analysis" class="tab-page hidden">
+
+  <!-- 데이터 없을 때 -->
+  <div id="an-empty" class="empty">
+    <div class="empty-icon">📈</div>
+    <div class="empty-title">캠페인 데이터를 먼저 업로드하세요</div>
+    <div class="empty-desc">캠페인 탭에서 리포트를 업로드하면 분석 탭이 활성화됩니다.</div>
+  </div>
+
+  <!-- 분석 콘텐츠 -->
+  <div id="an-content" class="an-page hidden">
+
+    <!-- 1. 퍼널 뷰 -->
+    <div class="an-card">
+      <div class="an-card-title">🔽 퍼널 뷰</div>
+      <div class="an-controls">
+        <span class="an-ctrl-label">세그먼트 비교</span>
+        <select id="an-funnel-dim" class="f-input" style="width:auto;font-size:12px;padding:5px 10px;" onchange="AnUI.onFunnelDimChange()"></select>
+      </div>
+      <div id="an-funnel-overall"></div>
+      <div id="an-funnel-segment" class="hidden" style="margin-top:20px;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">세그먼트별 CTR / CVR / ROAS (비용 상위 8)</div>
+        <div class="chart-box tall"><canvas id="c-an-funnel-seg"></canvas></div>
+      </div>
+    </div>
+
+    <!-- 2. 채널 기여도 (예정) -->
+    <div class="an-card an-card-placeholder">
+      <div class="an-card-title">📊 채널 기여도 <span class="an-coming">준비 중</span></div>
+    </div>
+
+    <!-- 3. 이상탐지 고도화 (예정) -->
+    <div class="an-card an-card-placeholder">
+      <div class="an-card-title">🔍 이상탐지 고도화 <span class="an-coming">준비 중</span></div>
+    </div>
+
+  </div>
+</div><!-- /page-analysis -->
 
 <!-- 키워드 트렌드 모달 -->
 <div id="kw-trend-modal" class="overlay hidden" onclick="if(event.target===this)KWUI.closeTrend()">

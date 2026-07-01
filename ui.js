@@ -1136,16 +1136,17 @@ function switchTab(tab) {
   if (cur === next) return;
 
   cur.classList.add('fading');
-  document.getElementById('hdr-campaign').classList.toggle('hidden', tab === 'keyword');
-  document.getElementById('hdr-keyword').classList.toggle('hidden',  tab === 'campaign');
-  document.getElementById('tab-campaign').classList.toggle('active', tab === 'campaign');
-  document.getElementById('tab-keyword').classList.toggle('active',  tab === 'keyword');
+  ['campaign','keyword','analysis'].forEach(t => {
+    document.getElementById('hdr-' + t)?.classList.toggle('hidden', t !== tab);
+    document.getElementById('tab-' + t)?.classList.toggle('active', t === tab);
+  });
 
   setTimeout(() => {
     cur.classList.add('hidden');
     cur.classList.remove('fading');
     document.body.classList.toggle('kw-mode', tab === 'keyword');
     next.classList.remove('hidden');
+    if (tab === 'analysis') AnUI.render();
     next.style.opacity = '0';
     requestAnimationFrame(() => {
       next.style.transition = 'opacity 0.35s ease';
@@ -2184,6 +2185,132 @@ const Deployer = {
     const updateRes = await fetch(`${base}/git/refs/heads/main`, { method:'PATCH', headers:h,
       body: JSON.stringify({ sha: newCommitData.sha }) });
     if (!updateRes.ok) throw new Error('브랜치 업데이트 실패: ' + updateRes.status);
+  },
+};
+
+// ── 분석 탭 ───────────────────────────────────────────────────────────────────
+const AnCh = { funnelSeg: null };
+
+const AnUI = {
+  render() {
+    const hasData = Store.raw?.length > 0;
+    document.getElementById('an-empty').classList.toggle('hidden', hasData);
+    document.getElementById('an-content').classList.toggle('hidden', !hasData);
+    if (!hasData) return;
+    this._populateDimSelect('an-funnel-dim');
+    this.renderFunnel();
+  },
+
+  _populateDimSelect(id) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">전체 (세그먼트 없음)</option>' +
+      Object.keys(Store.dims).map(f =>
+        `<option value="${f}"${f===cur?' selected':''}>${_dimLabels[f]||f}</option>`
+      ).join('');
+  },
+
+  onFunnelDimChange() { this.renderFunnel(); },
+
+  renderFunnel() {
+    // Store.filtered 전체 집계
+    const tot = { impr:0, clicks:0, cost:0, conv:0, revenue:0 };
+    Store.filtered.forEach(r => {
+      tot.impr    += r.impr;
+      tot.clicks  += r.clicks;
+      tot.cost    += r.cost;
+      tot.conv    += r.conv;
+      tot.revenue += r.revenue;
+    });
+    derived(tot);
+    this._renderOverallFunnel(tot);
+
+    const field = document.getElementById('an-funnel-dim')?.value;
+    const segEl = document.getElementById('an-funnel-segment');
+    if (field && Store.dims[field]) {
+      segEl.classList.remove('hidden');
+      this._renderSegmentFunnel(field);
+    } else {
+      segEl.classList.add('hidden');
+      if (AnCh.funnelSeg) { AnCh.funnelSeg.destroy(); AnCh.funnelSeg = null; }
+    }
+  },
+
+  _renderOverallFunnel(tot) {
+    const el = document.getElementById('an-funnel-overall');
+    if (!el) return;
+    if (tot.impr === 0) {
+      el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px 0;">데이터 없음</p>';
+      return;
+    }
+    // log10 스케일 너비: 분모 0 가드, 최소 10% 확보
+    const logMax = Math.log10(Math.max(tot.impr, 1));
+    const logW = v => v > 0 ? Math.max(10, Math.log10(v) / logMax * 100).toFixed(1) : 0;
+    // CVR = conv / clicks (클릭 0 가드)
+    const cvr = tot.clicks > 0 ? tot.conv / tot.clicks * 100 : 0;
+
+    const stages = [
+      { label:'노출', icon:'👁', val:tot.impr,    fmtV: v => v.toLocaleString()+'회', color:'#4c9eff' },
+      { label:'클릭', icon:'🖱', val:tot.clicks,  fmtV: v => v.toLocaleString()+'회', color:'#2ecc71',
+        rate:{ label:'CTR', val:tot.ctr,  fmtR: v => v.toFixed(2)+'%' },
+        drop: tot.impr   > 0 ? (1 - tot.clicks / tot.impr)   * 100 : 0 },
+      { label:'전환', icon:'🎯', val:tot.conv,    fmtV: v => v.toLocaleString()+'건', color:'#f39c12',
+        rate:{ label:'CVR', val:cvr,      fmtR: v => v.toFixed(2)+'%' },
+        drop: tot.clicks > 0 ? (1 - tot.conv   / tot.clicks) * 100 : 0 },
+      { label:'매출', icon:'💰', val:tot.revenue, fmtV: v => '₩'+Math.round(v).toLocaleString(), color:'#9b59b6',
+        rate:{ label:'ROAS', val:tot.roas, fmtR: v => v.toFixed(2)+'x' } },
+    ];
+
+    el.innerHTML = '<div class="funnel-wrap">' + stages.map((s, i) => {
+      const w = logW(s.val);
+      const connector = i > 0 ? `<div class="funnel-connector">
+        ${s.rate ? `<span class="funnel-badge" style="color:${s.color}">${s.rate.label} <strong>${s.rate.fmtR(s.rate.val)}</strong></span>` : ''}
+        ${s.drop != null ? `<span class="funnel-drop">이탈 ${s.drop.toFixed(1)}%</span>` : ''}
+      </div>` : '';
+      return `${connector}<div class="funnel-row">
+        <div class="funnel-lbl">${s.icon} ${s.label}</div>
+        <div class="funnel-track">
+          <div class="funnel-fill" style="width:${w}%;background:${s.color};">
+            <span class="funnel-val">${s.fmtV(s.val)}</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('') + '</div>';
+  },
+
+  _renderSegmentFunnel(field) {
+    // 비용 내림차순 상위 8 세그먼트
+    const segs = Store.byDim(field).sort((a,b) => (b.cost||0) - (a.cost||0)).slice(0, 8);
+    const labels = segs.map(s => s[field] || '(없음)');
+    // CVR = conv/clicks (클릭 0 가드)
+    const ctrData  = segs.map(s => s.ctr  || 0);
+    const cvrData  = segs.map(s => s.clicks > 0 ? s.conv / s.clicks * 100 : 0);
+    const roasData = segs.map(s => s.roas || 0);
+
+    if (AnCh.funnelSeg) { AnCh.funnelSeg.destroy(); AnCh.funnelSeg = null; }
+    AnCh.funnelSeg = new Chart(document.getElementById('c-an-funnel-seg'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label:'CTR (%)',  data:ctrData,  backgroundColor:'#4c9eff88', borderColor:'#4c9eff', borderWidth:1, borderRadius:3, yAxisID:'y' },
+          { label:'CVR (%)',  data:cvrData,  backgroundColor:'#2ecc7188', borderColor:'#2ecc71', borderWidth:1, borderRadius:3, yAxisID:'y' },
+          { label:'ROAS (x)', data:roasData, backgroundColor:'#9b59b688', borderColor:'#9b59b6', borderWidth:1, borderRadius:3, yAxisID:'y2' },
+        ],
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{labels:{color:'#8b90a0',font:{size:11},boxWidth:10}}, tooltip:{mode:'index',intersect:false} },
+        scales:{
+          x:  { ticks:{color:'#8b90a0',font:{size:10}}, grid:{color:'#2a2d3e'} },
+          y:  { position:'left',  ticks:{color:'#8b90a0',font:{size:10},callback:v=>v.toFixed(1)+'%'}, grid:{color:'#2a2d3e'},
+                title:{display:true,text:'CTR / CVR (%)',color:'#8b90a0',font:{size:10}} },
+          y2: { position:'right', ticks:{color:'#9b59b6',font:{size:10},callback:v=>v.toFixed(1)+'x'}, grid:{display:false},
+                title:{display:true,text:'ROAS',color:'#9b59b6',font:{size:10}} },
+        },
+      },
+    });
   },
 };
 
