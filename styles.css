@@ -363,3 +363,15 @@
     .td-sum  { color: var(--blue); }
     .td-pos  { color: var(--green); font-weight: 600; }
     .td-neg  { color: var(--red);   font-weight: 600; }
+
+    /* 이상탐지 */
+    .an-anom-empty { font-size: 13px; color: var(--muted); padding: 24px 0; text-align: center; }
+    .an-anom-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .an-anom-tbl th, .an-anom-tbl td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
+    .an-anom-tbl thead th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
+    .an-anom-tbl tbody tr:hover { background: var(--hover); }
+    .td-date  { color: var(--blue); font-family: monospace; white-space: nowrap; }
+    .td-val   { font-weight: 600; }
+    .td-range { color: var(--muted); font-size: 11px; }
+    .td-dir   { font-weight: 700; }
+    .an-anom-hint { font-size: 11px; color: var(--muted); margin-top: 10px; text-align: right; }

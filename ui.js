@@ -2202,6 +2202,7 @@ const AnUI = {
     const defaultDim = Object.keys(Store.dims)[0] || '';
     this._populateDimSelect('an-contrib-dim', defaultDim);
     this.renderContrib();
+    this.renderAnomaly();
   },
 
   _populateDimSelect(id, defaultVal) {
@@ -2302,6 +2303,94 @@ const AnUI = {
         },
       },
     });
+  },
+
+  onAnomalyChange() { this.renderAnomaly(); },
+
+  renderAnomaly() {
+    const metric = document.getElementById('an-anom-metric')?.value || 'cost';
+    const win    = parseInt(document.getElementById('an-anom-window')?.value || '7', 10);
+    const sigma  = parseFloat(document.getElementById('an-anom-sigma')?.value || '2');
+    const anomalies = this._detectAnomalies(metric, win, sigma);
+
+    const emptyEl = document.getElementById('an-anom-empty');
+    const tableEl = document.getElementById('an-anom-table-wrap');
+    if (!emptyEl || !tableEl) return;
+
+    if (!anomalies.length) {
+      emptyEl.classList.remove('hidden');
+      tableEl.innerHTML = '';
+      return;
+    }
+    emptyEl.classList.add('hidden');
+
+    const metricLabel = { cost:'비용', conv:'전환수', cpa:'CPA', roas:'ROAS' };
+    const fmt = (v, m) => {
+      if (m === 'cost') return '₩' + Math.round(v).toLocaleString();
+      if (m === 'conv') return Math.round(v).toLocaleString() + '건';
+      if (m === 'cpa')  return '₩' + Math.round(v).toLocaleString();
+      return v.toFixed(2) + 'x';
+    };
+
+    tableEl.innerHTML = `
+      <table class="an-anom-tbl">
+        <thead><tr>
+          <th>날짜</th><th>지표</th><th>실제값</th><th>기대 범위</th><th>편차</th><th>방향</th>
+        </tr></thead>
+        <tbody>${anomalies.map(a => `<tr>
+          <td class="td-date">${a.date}</td>
+          <td>${metricLabel[metric] || metric}</td>
+          <td class="td-val">${fmt(a.actual, metric)}</td>
+          <td class="td-range">${fmt(a.lower, metric)} ~ ${fmt(a.upper, metric)}</td>
+          <td class="${a.zScore > 0 ? 'td-pos' : 'td-neg'}">${a.zScore > 0 ? '+' : ''}${a.zScore.toFixed(2)}σ</td>
+          <td class="td-dir">${a.zScore > 0 ? '↑ 급등' : '↓ 급락'}</td>
+        </tr>`).join('')}
+        </tbody>
+      </table>
+      <div class="an-anom-hint">이동평균 ±${sigma}σ 기준 · 윈도우 ${win}일 · ${anomalies.length}건 탐지</div>`;
+  },
+
+  // 이동평균 Z-score 이상탐지
+  // 각 날짜 t에 대해 직전 win일의 평균(μ)·표준편차(σ)를 구해,
+  // |actual - μ| > sigma × σ 이면 이상치로 판정
+  _detectAnomalies(metric, win, sigma) {
+    // byDate()는 내부적으로 derived()를 호출하므로 cpa/roas가 이미 계산돼 있음
+    const byDate = Store.byDate();
+    if (byDate.length < win + 1) return [];
+
+    const getValue = r => {
+      if (metric === 'cpa')  return r.cost > 0 && r.conv > 0 ? r.cost / r.conv : null;
+      if (metric === 'roas') return r.cost > 0 ? r.revenue / r.cost : null;
+      return r[metric] ?? null;
+    };
+
+    const anomalies = [];
+    for (let i = win; i < byDate.length; i++) {
+      const window = byDate.slice(i - win, i);
+      const vals = window.map(r => getValue(r)).filter(v => v !== null);
+      if (vals.length < 2) continue;                     // 분산 계산 불가
+
+      const mu  = vals.reduce((s, v) => s + v, 0) / vals.length;
+      const variance = vals.reduce((s, v) => s + (v - mu) ** 2, 0) / vals.length;
+      const sd  = Math.sqrt(variance);
+      if (sd === 0) continue;                            // 모든 값이 동일 → 이상치 없음
+
+      const actual = getValue(byDate[i]);
+      if (actual === null) continue;
+
+      const z = (actual - mu) / sd;
+      if (Math.abs(z) >= sigma) {
+        anomalies.push({
+          date:   byDate[i].date,
+          actual,
+          lower:  mu - sigma * sd,
+          upper:  mu + sigma * sd,
+          zScore: z,
+        });
+      }
+    }
+    // 편차(|z|) 내림차순
+    return anomalies.sort((a, b) => Math.abs(b.zScore) - Math.abs(a.zScore));
   },
 
   _renderContribTable(field) {

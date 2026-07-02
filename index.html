@@ -356,9 +356,32 @@
       </div>
     </div>
 
-    <!-- 3. 이상탐지 고도화 (예정) -->
-    <div class="an-card an-card-placeholder">
-      <div class="an-card-title">🔍 이상탐지 고도화 <span class="an-coming">준비 중</span></div>
+    <!-- 3. 이상탐지 고도화 -->
+    <div class="an-card" id="an-anomaly-card">
+      <div class="an-card-title">🔍 이상탐지 고도화</div>
+      <div class="an-controls">
+        <span class="an-ctrl-label">지표</span>
+        <select id="an-anom-metric" class="f-input" style="width:110px" onchange="AnUI.onAnomalyChange()">
+          <option value="cost">비용</option>
+          <option value="conv">전환수</option>
+          <option value="cpa">CPA</option>
+          <option value="roas">ROAS</option>
+        </select>
+        <span class="an-ctrl-label">윈도우</span>
+        <select id="an-anom-window" class="f-input" style="width:72px" onchange="AnUI.onAnomalyChange()">
+          <option value="7" selected>7일</option>
+          <option value="14">14일</option>
+          <option value="30">30일</option>
+        </select>
+        <span class="an-ctrl-label">감도</span>
+        <select id="an-anom-sigma" class="f-input" style="width:72px" onchange="AnUI.onAnomalyChange()">
+          <option value="1.5">±1.5σ</option>
+          <option value="2" selected>±2σ</option>
+          <option value="3">±3σ</option>
+        </select>
+      </div>
+      <div id="an-anom-empty" class="an-anom-empty hidden">탐지된 이상치가 없습니다.</div>
+      <div id="an-anom-table-wrap" style="overflow-x:auto;"></div>
     </div>
 
   </div>
