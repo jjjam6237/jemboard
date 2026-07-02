@@ -1312,9 +1312,8 @@ const KWParser = {
           UI.hideLoading();
           KWUI.render();
           JBStorage.saveKeyword(file.name, kwMap);
-          document.getElementById('btn-deploy').classList.remove('hidden');
-          document.getElementById('btn-deploy-kw').classList.remove('hidden');
           document.getElementById('btn-reset-kw').classList.remove('hidden');
+          Deployer.autoDeploy();
         } catch(err) {
           UI.hideLoading();
           alert('파싱 오류: ' + err.message);
@@ -2048,6 +2047,7 @@ const MappingUI = {
     UI.render();
     this.updateBadge();
     this.close();
+    Deployer.autoDeploy();
   },
 
   updateBadge() {
@@ -2085,6 +2085,51 @@ const Deployer = {
 
   close() { document.getElementById('m-deploy').classList.add('hidden'); },
 
+  _setStatus(msg, color) {
+    const el = document.getElementById('deploy-status');
+    if (!el) return;
+    el.textContent = msg;
+    el.style.color = color || 'var(--green)';
+    el.style.display = msg ? '' : 'none';
+  },
+
+  _buildFiles() {
+    const files = [];
+    if (Store.raw?.length) {
+      const fname = document.getElementById('fname').textContent.replace(/^ — /, '').trim();
+      files.push({ path: 'data.json', content: JSON.stringify({
+        fileName: fname, updatedAt: new Date().toISOString(),
+        rows: Store.raw,
+        targets: JSON.parse(localStorage.getItem('jb_targets') || '{}'),
+        notes: Notes.getData()
+      })});
+    }
+    if (KWStore.raw?.length) {
+      const kwRows = KWStore.raw.map(r => KWStore._agg(r)).filter(r => r.impr > 0 || r.cost > 0);
+      files.push({ path: 'kw_data.json', content: JSON.stringify({
+        dateFrom: KWStore.dateFrom, dateTo: KWStore.dateTo, rows: kwRows
+      })});
+    }
+    return files;
+  },
+
+  // 업로드 완료 후 자동 호출 — PAT 없으면 설정 모달, 있으면 조용히 push
+  async autoDeploy() {
+    const pat = localStorage.getItem(this.PAT_KEY);
+    if (!pat) { this.open(); return; }
+    const files = this._buildFiles();
+    if (!files.length) return;
+    this._setStatus('⏳ 배포 중...');
+    try {
+      await this._gitPush(pat, files, () => {});
+      this._setStatus('☁ 배포 완료');
+      setTimeout(() => this._setStatus(''), 5000);
+    } catch(err) {
+      this._setStatus('⚠ 배포 실패 — 설정을 확인하세요', 'var(--orange)');
+      setTimeout(() => this._setStatus(''), 10000);
+    }
+  },
+
   async deploy() {
     const pat   = document.getElementById('deploy-pat-input').value.trim();
     const owner = document.getElementById('deploy-owner-input').value.trim();
@@ -2102,40 +2147,13 @@ const Deployer = {
     const setMsg = t => { document.getElementById('deploy-progress-text').textContent = t; };
 
     try {
-      const files = [];
-
-      // 캠페인 데이터
-      if (Store.raw?.length) {
-        setMsg('캠페인 데이터 준비 중...');
-        const fname = document.getElementById('fname').textContent.replace(/^ — /, '').trim();
-        files.push({
-          path: 'data.json',
-          content: JSON.stringify({ fileName: fname, updatedAt: new Date().toISOString(), rows: Store.raw, targets: JSON.parse(localStorage.getItem('jb_targets')||'{}'), notes: Notes.getData() })
-        });
-      }
-
-      // 키워드 데이터 (현재 기간으로 집계)
-      if (KWStore.raw?.length) {
-        setMsg('키워드 데이터 준비 중...');
-        const kwRows = KWStore.raw
-          .map(r => KWStore._agg(r))
-          .filter(r => r.impr > 0 || r.cost > 0);
-        files.push({
-          path: 'kw_data.json',
-          content: JSON.stringify({ dateFrom: KWStore.dateFrom, dateTo: KWStore.dateTo, rows: kwRows })
-        });
-      }
-
+      const files = this._buildFiles();
       if (!files.length) { alert('배포할 데이터가 없습니다.'); this.close(); return; }
-
       setMsg('GitHub에 연결 중...');
       await this._gitPush(pat, files, setMsg);
-
       setMsg('배포 완료!');
-      setTimeout(() => {
-        this.close();
-        alert('배포 완료! 1~2분 후 URL에 반영됩니다.\nhttps://' + this.OWNER + '.github.io/' + this.REPO + '/');
-      }, 800);
+      this._setStatus('☁ 배포 완료');
+      setTimeout(() => { this.close(); setTimeout(() => this._setStatus(''), 5000); }, 800);
     } catch(err) {
       document.getElementById('deploy-actions').classList.remove('hidden');
       document.getElementById('deploy-pat-section').classList.remove('hidden');
@@ -2554,8 +2572,8 @@ async function initDashboard() {
         document.getElementById('data-range').textContent =
           `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()} 배포`;
         UI.render();
-        // 배포/초기화 버튼 활성화 (잠금 해제 시 보임)
-        ['btn-deploy','btn-deploy-kw','btn-reset','btn-reset-kw'].forEach(id =>
+        // 초기화 버튼 활성화 (잠금 해제 시 보임)
+        ['btn-reset','btn-reset-kw'].forEach(id =>
           document.getElementById(id)?.classList.remove('hidden'));
         campaignLoaded = true;
       }
@@ -2583,8 +2601,6 @@ async function initDashboard() {
       document.getElementById('fname').textContent = ' — ' + c.fileName;
       UI.render();
       JBStorage._showSaved(c.fileName);
-      document.getElementById('btn-deploy').classList.remove('hidden');
-      document.getElementById('btn-deploy-kw').classList.remove('hidden');
       document.getElementById('btn-reset-kw').classList.remove('hidden');
       campaignLoaded = true;
     }

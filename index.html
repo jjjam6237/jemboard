@@ -12,6 +12,7 @@
 
 <header class="header">
   <div class="logo">🎯 잼시보드<small id="fname" style="display:none;"></small></div>
+  <span id="deploy-status" style="font-size:11px;color:var(--green);margin-left:2px;display:none;"></span>
   <span id="view-count" style="font-size:11px;color:var(--muted);margin-left:2px;cursor:default;position:relative;">
     <span id="view-count-text"></span>
     <div id="view-stats-popup" style="display:none;position:absolute;top:24px;left:0;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:200px;z-index:500;box-shadow:0 8px 24px rgba(0,0,0,.3);white-space:nowrap;">
@@ -30,7 +31,7 @@
     <button class="btn btn-secondary btn-sm csv-btn" onclick="Store.exportCSV()">⬇ CSV</button>
     <button id="schema-badge" class="btn btn-secondary btn-sm hidden admin-btn" onclick="MappingUI.open()" style="font-size:11px;">✓ 매핑</button>
     <button class="btn btn-secondary btn-sm hidden admin-btn" id="btn-reset" onclick="JBStorage.clearAll()" style="color:var(--red);">× 초기화</button>
-    <button class="btn btn-secondary btn-sm hidden admin-btn" id="btn-deploy" onclick="Deployer.open()" style="color:#a78bfa;border-color:#7c3aed33;">🚀 배포하기</button>
+    <button class="btn btn-secondary btn-sm hidden admin-btn" id="btn-deploy" onclick="Deployer.open()" style="color:#a78bfa;border-color:#7c3aed33;">⚙ 배포설정</button>
     <button class="btn btn-primary btn-sm admin-btn" onclick="UI.showUpload()">📁 리포트 업로드</button>
   </div>
   <div class="header-right hidden" id="hdr-analysis" style="pointer-events:none;">
@@ -41,7 +42,7 @@
     <span class="file-name" id="kw-saved-info" style="color:var(--green);"></span>
     <button class="btn btn-secondary btn-sm csv-btn" onclick="KWUI.exportCSV()">⬇ CSV</button>
     <button class="btn btn-secondary btn-sm hidden admin-btn" id="btn-reset-kw" onclick="JBStorage.clearAll()" style="color:var(--red);">× 초기화</button>
-    <button class="btn btn-secondary btn-sm hidden admin-btn" id="btn-deploy-kw" onclick="Deployer.open()" style="color:#a78bfa;border-color:#7c3aed33;">🚀 배포하기</button>
+    <button class="btn btn-secondary btn-sm hidden admin-btn" id="btn-deploy-kw" onclick="Deployer.open()" style="color:#a78bfa;border-color:#7c3aed33;">⚙ 배포설정</button>
     <button class="btn btn-primary btn-sm admin-btn" onclick="KWUI.showUpload()">📁 키워드 업로드</button>
   </div>
 </header>
@@ -466,10 +467,10 @@
 <!-- Deploy modal -->
 <div id="m-deploy" class="overlay hidden" onclick="if(event.target===this)Deployer.close()">
   <div class="modal" style="width:400px;">
-    <div class="modal-title">🚀 GitHub에 배포하기</div>
+    <div class="modal-title">☁ GitHub 배포 설정</div>
     <div class="info-box" style="margin-bottom:12px;">
-      배포하면 <strong>모든 방문자</strong>가 이 데이터를 볼 수 있습니다.<br>
-      캠페인 데이터와 키워드 데이터(있을 경우)가 함께 배포됩니다.
+      저장 후 <strong>파일 업로드 시 자동으로 배포</strong>됩니다.<br>
+      토큰을 저장하면 다음부터 업로드만 해도 즉시 반영됩니다.
     </div>
     <div id="deploy-pat-section">
       <div style="margin-bottom:12px;">
@@ -494,7 +495,7 @@
     </div>
     <div class="modal-actions" id="deploy-actions">
       <button class="btn btn-secondary" onclick="Deployer.close()">취소</button>
-      <button class="btn btn-primary" onclick="Deployer.deploy()" style="background:#7c3aed;">🚀 배포 시작</button>
+      <button class="btn btn-primary" onclick="Deployer.deploy()" style="background:#7c3aed;">☁ 저장 & 배포</button>
     </div>
   </div>
 </div>
