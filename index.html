@@ -340,9 +340,20 @@
       </div>
     </div>
 
-    <!-- 2. 채널 기여도 (예정) -->
-    <div class="an-card an-card-placeholder">
-      <div class="an-card-title">📊 채널 기여도 <span class="an-coming">준비 중</span></div>
+    <!-- 2. 채널 기여도 -->
+    <div class="an-card" id="an-contrib-card">
+      <div class="an-card-title">📊 채널 기여도</div>
+      <div class="an-controls">
+        <span class="an-ctrl-label">분석 차원</span>
+        <select id="an-contrib-dim" class="f-input" style="width:auto;font-size:12px;padding:5px 10px;" onchange="AnUI.onContribDimChange()"></select>
+      </div>
+      <div class="an-contrib-grid">
+        <div>
+          <div class="an-sublabel">버블 크기 = 전환수 &nbsp;·&nbsp; X = 비용 비중 &nbsp;·&nbsp; Y = ROAS &nbsp;·&nbsp; 점선 = 평균</div>
+          <div class="chart-box tall"><canvas id="c-an-contrib-bubble"></canvas></div>
+        </div>
+        <div id="an-contrib-table-wrap" style="overflow-x:auto;"></div>
+      </div>
     </div>
 
     <!-- 3. 이상탐지 고도화 (예정) -->

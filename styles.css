@@ -346,3 +346,20 @@
     .funnel-connector { display: flex; align-items: center; gap: 12px; padding: 5px 0 5px 62px; }
     .funnel-badge { font-size: 12px; }
     .funnel-drop { font-size: 11px; color: var(--muted); }
+
+    /* 채널 기여도 */
+    .an-contrib-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+    @media (max-width: 760px) { .an-contrib-grid { grid-template-columns: 1fr; } }
+    .an-sublabel { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+    .an-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+    .an-contrib-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .an-contrib-tbl th, .an-contrib-tbl td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: right; }
+    .an-contrib-tbl th:nth-child(1), .an-contrib-tbl td:nth-child(1) { width: 28px; text-align: center; }
+    .an-contrib-tbl th:nth-child(2), .an-contrib-tbl td:nth-child(2) { text-align: left; }
+    .an-contrib-tbl thead th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
+    .an-contrib-tbl tbody tr:hover { background: var(--hover); }
+    .an-contrib-tbl tfoot td { font-weight: 700; border-top: 2px solid var(--border); border-bottom: none; }
+    .td-rank { color: var(--muted); }
+    .td-sum  { color: var(--blue); }
+    .td-pos  { color: var(--green); font-weight: 600; }
+    .td-neg  { color: var(--red);   font-weight: 600; }

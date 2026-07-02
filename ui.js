@@ -2189,7 +2189,7 @@ const Deployer = {
 };
 
 // ── 분석 탭 ───────────────────────────────────────────────────────────────────
-const AnCh = { funnelSeg: null };
+const AnCh = { funnelSeg: null, contribBubble: null };
 
 const AnUI = {
   render() {
@@ -2197,21 +2197,147 @@ const AnUI = {
     document.getElementById('an-empty').classList.toggle('hidden', hasData);
     document.getElementById('an-content').classList.toggle('hidden', !hasData);
     if (!hasData) return;
-    this._populateDimSelect('an-funnel-dim');
+    this._populateDimSelect('an-funnel-dim', '');
     this.renderFunnel();
+    const defaultDim = Object.keys(Store.dims)[0] || '';
+    this._populateDimSelect('an-contrib-dim', defaultDim);
+    this.renderContrib();
   },
 
-  _populateDimSelect(id) {
+  _populateDimSelect(id, defaultVal) {
     const sel = document.getElementById(id);
     if (!sel) return;
-    const cur = sel.value;
-    sel.innerHTML = '<option value="">전체 (세그먼트 없음)</option>' +
+    const cur = sel.value || defaultVal || '';
+    const extraOpt = id === 'an-funnel-dim' ? '<option value="">전체 (세그먼트 없음)</option>' : '<option value="">— 차원 선택 —</option>';
+    sel.innerHTML = extraOpt +
       Object.keys(Store.dims).map(f =>
         `<option value="${f}"${f===cur?' selected':''}>${_dimLabels[f]||f}</option>`
       ).join('');
   },
 
-  onFunnelDimChange() { this.renderFunnel(); },
+  onFunnelDimChange()  { this.renderFunnel(); },
+  onContribDimChange() { this.renderContrib(); },
+
+  renderContrib() {
+    const field = document.getElementById('an-contrib-dim')?.value;
+    if (!field) return;
+    this._renderContribBubble(field);
+    this._renderContribTable(field);
+  },
+
+  _renderContribBubble(field) {
+    const segs = Store.byDim(field);
+    if (!segs.length) return;
+
+    // 전체 집계 (분모 0 가드)
+    const totalCost    = segs.reduce((s, r) => s + r.cost, 0);
+    const totalRevenue = segs.reduce((s, r) => s + r.revenue, 0);
+    // 전체 ROAS: Y축 기준선
+    const overallRoas  = totalCost > 0 ? totalRevenue / totalCost : 0;
+    // X축 기준선: 균등 배분 시 각 세그먼트 비중
+    const avgShare     = segs.length > 0 ? 100 / segs.length : 50;
+    // 버블 반지름: sqrt(전환/최대전환) × maxR (면적이 전환수에 비례)
+    const maxConv = Math.max(...segs.map(s => s.conv || 0), 1);
+    const maxR = 38;
+
+    const datasets = segs.map(s => {
+      const costShare = totalCost > 0 ? s.cost / totalCost * 100 : 0;
+      const r = Math.max(5, Math.sqrt((s.conv || 0) / maxConv) * maxR);
+      return {
+        label: s[field] || '(없음)',
+        data: [{ x: costShare, y: s.roas || 0, r, conv: s.conv || 0, cost: s.cost || 0 }],
+        backgroundColor: getDimColor(s[field]) + 'aa',
+        borderColor:     getDimColor(s[field]),
+        borderWidth: 1.5,
+      };
+    });
+
+    // 4분면 기준선을 afterDraw 플러그인으로 그리기
+    const quadPlugin = {
+      id: 'quadrant',
+      afterDraw(chart) {
+        const { ctx, chartArea: { left, right, top, bottom }, scales } = chart;
+        const px = scales.x.getPixelForValue(avgShare);
+        const py = scales.y.getPixelForValue(overallRoas);
+        ctx.save();
+        ctx.strokeStyle = '#8b90a050';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath(); ctx.moveTo(px, top);    ctx.lineTo(px, bottom); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(left, py);   ctx.lineTo(right, py);  ctx.stroke();
+        // 4분면 레이블
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#8b90a060';
+        ctx.fillText('효율↑·규모↑', px + 5, top + 14);
+        ctx.fillText('효율↑·규모↓', left + 4, top + 14);
+        ctx.fillText('효율↓·규모↑', px + 5, bottom - 6);
+        ctx.fillText('효율↓·규모↓', left + 4, bottom - 6);
+        ctx.restore();
+      },
+    };
+
+    if (AnCh.contribBubble) { AnCh.contribBubble.destroy(); AnCh.contribBubble = null; }
+    AnCh.contribBubble = new Chart(document.getElementById('c-an-contrib-bubble'), {
+      type: 'bubble',
+      data: { datasets },
+      plugins: [quadPlugin],
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#8b90a0', font: { size: 10 }, boxWidth: 10 } },
+          tooltip: {
+            callbacks: {
+              label(ctx) {
+                const d = ctx.raw;
+                return `${ctx.dataset.label} | 비용비중 ${d.x.toFixed(1)}% | ROAS ${d.y.toFixed(2)}x | 전환 ${d.conv.toLocaleString()}건`;
+              },
+            },
+          },
+        },
+        scales: {
+          x: { title: { display: true, text: '비용 비중 (%)', color: '#8b90a0', font: { size: 10 } },
+               ticks: { color: '#8b90a0', font: { size: 9 }, callback: v => v.toFixed(0) + '%' }, grid: { color: '#2a2d3e' } },
+          y: { title: { display: true, text: 'ROAS', color: '#8b90a0', font: { size: 10 } },
+               ticks: { color: '#8b90a0', font: { size: 9 }, callback: v => v.toFixed(1) + 'x' }, grid: { color: '#2a2d3e' } },
+        },
+      },
+    });
+  },
+
+  _renderContribTable(field) {
+    const segs = Store.byDim(field);
+    if (!segs.length) return;
+
+    const totalCost    = segs.reduce((s, r) => s + r.cost, 0);
+    const totalRevenue = segs.reduce((s, r) => s + r.revenue, 0);
+    const totalConv    = segs.reduce((s, r) => s + r.conv, 0);
+    // 전체 ROAS (분모 0 가드)
+    const overallRoas  = totalCost > 0 ? totalRevenue / totalCost : 0;
+
+    const sorted = [...segs].sort((a, b) => (b.roas || 0) - (a.roas || 0));
+    const pct = (v, tot) => tot > 0 ? (v / tot * 100).toFixed(1) + '%' : '—';
+
+    document.getElementById('an-contrib-table-wrap').innerHTML = `
+      <table class="an-contrib-tbl">
+        <thead><tr>
+          <th>#</th><th>${_dimLabels[field] || field}</th>
+          <th>비용비중</th><th>매출비중</th><th>전환비중</th><th>ROAS</th>
+        </tr></thead>
+        <tbody>${sorted.map((s, i) => `<tr>
+          <td class="td-rank">${i + 1}</td>
+          <td><span class="an-dot" style="background:${getDimColor(s[field]||'')}"></span>${s[field] || '(없음)'}</td>
+          <td>${pct(s.cost, totalCost)}</td>
+          <td>${pct(s.revenue, totalRevenue)}</td>
+          <td>${pct(s.conv, totalConv)}</td>
+          <td class="${(s.roas||0) >= overallRoas ? 'td-pos' : 'td-neg'}">${(s.roas||0).toFixed(2)}x</td>
+        </tr>`).join('')}</tbody>
+        <tfoot><tr>
+          <td></td><td class="td-sum">합계</td>
+          <td>100.0%</td><td>100.0%</td><td>100.0%</td>
+          <td class="td-sum">${overallRoas.toFixed(2)}x</td>
+        </tr></tfoot>
+      </table>`;
+  },
 
   renderFunnel() {
     // Store.filtered 전체 집계
