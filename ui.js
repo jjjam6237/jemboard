@@ -366,14 +366,23 @@ const Ins = {
   },
 };
 
+// 목표 달성률 → 신호등. lowerBetter=true(예: CPA)면 target/actual로 역산해 "낮을수록 좋음"을 반영.
+// target이 0/미입력이면 null 반환 → 호출부에서 신호등 숨김 처리.
+function targetLight(actual, target, lowerBetter = false) {
+  if (!target) return null;
+  const pct = lowerBetter ? (target / (actual || Infinity)) * 100 : (actual / target) * 100;
+  const icon = pct >= 100 ? '🟢' : pct >= 90 ? '🟡' : '🔴';
+  return { pct, icon };
+}
+
 // ── UI ────────────────────────────────────────────────────────────────────────
 const UI = {
   render() {
     document.getElementById('empty').classList.add('hidden');
     document.getElementById('main').classList.remove('hidden');
     this.renderSidebar();
-    this.renderKPIs();
     this.renderPacing();
+    this.renderKPIs();
     this.renderWeekCompare();
     this.renderMonthCompare();
     this.loadTargets();
@@ -436,6 +445,8 @@ const UI = {
     const bd = Store.byDate();
     const last = bd[bd.length-1]||{}, prev = bd[bd.length-2]||{};
     const keys = ['cost','impr','clicks','ctr','cpc','conv','cpa','revenue','roas','gaConv','appInstall'];
+    let targets;
+    try { targets = JSON.parse(localStorage.getItem('jb_targets')||'{}'); } catch(e) { targets = {}; }
 
     let cmpAgg = null;
     if (this.compareMode) {
@@ -461,19 +472,40 @@ const UI = {
       const compareRow = cmpAgg
         ? `<div class="kpi-prev">이전 <span>${fmt(m,p)}</span> &nbsp;<span class="${cls}">${arrow}${Math.abs(pct).toFixed(1)}%</span></div>`
         : `<div class="kpi-change ${cls}">${arrow} ${Math.abs(pct).toFixed(1)}% 전일대비</div>`;
+
+      let targetRow = '';
+      if (m === 'roas') {
+        const tl = targetLight(c, targets.roas, false);
+        if (tl) targetRow = `<div class="kpi-target">${tl.icon} 목표대비 ${tl.pct.toFixed(0)}%</div>`;
+      } else if (m === 'cpa') {
+        const tl = targetLight(c, targets.cpa, true);
+        if (tl) targetRow = `<div class="kpi-target">${tl.icon} 목표대비 ${tl.pct.toFixed(0)}%</div>`;
+      } else if (m === 'cost' && targets.cost && this.pacingPct?.cost != null) {
+        const p2 = this.pacingPct.cost;
+        const icon = p2>=100?'🟢':p2>=90?'🟡':'🔴';
+        targetRow = `<div class="kpi-target">${icon} 월예산 ${p2.toFixed(0)}%</div>`;
+      }
+
       return `<div class="kpi${i===0?' active':''}${cmpAgg?' compare':''}" onclick="UI.selectKPI('${m}',this)">
         <div class="kpi-label">${METRICS[m]?.label||m}</div>
         <div class="kpi-value">${fmt(m,c)}</div>
         ${compareRow}
+        ${targetRow}
       </div>`;
     }).join('');
   },
 
   saveTargets() {
-    const parse = id => parseInt((document.getElementById(id)?.value||'').replace(/[^0-9]/g,''))||0;
-    const t = { cost: parse('target-cost'), conv: parse('target-conv'), rev: parse('target-rev') };
+    const parseInt_ = id => parseInt((document.getElementById(id)?.value||'').replace(/[^0-9]/g,''))||0;
+    const parseFloat_ = id => parseFloat((document.getElementById(id)?.value||'').replace(/[^0-9.]/g,''))||0;
+    const t = {
+      cost: parseInt_('target-cost'), conv: parseInt_('target-conv'), rev: parseInt_('target-rev'),
+      roas: parseFloat_('target-roas'), cpa: parseInt_('target-cpa'),
+    };
     localStorage.setItem('jb_targets', JSON.stringify(t));
     this.renderPacing();
+    this.renderKPIs();
+    this.renderTable();
   },
 
   loadTargets() {
@@ -483,13 +515,15 @@ const UI = {
       if (t.cost) document.getElementById('target-cost').value = fmt(t.cost);
       if (t.conv) document.getElementById('target-conv').value = fmt(t.conv);
       if (t.rev)  document.getElementById('target-rev').value  = fmt(t.rev);
+      if (t.roas) document.getElementById('target-roas').value = t.roas;
+      if (t.cpa)  document.getElementById('target-cpa').value  = fmt(t.cpa);
     } catch(e) {}
   },
 
   renderPacing() {
     let t;
     try { t = JSON.parse(localStorage.getItem('jb_targets')||'{}'); } catch(e) { t = {}; }
-    if (!t.cost && !t.conv && !t.rev) { document.getElementById('card-pacing').classList.add('hidden'); return; }
+    if (!t.cost && !t.conv && !t.rev) { document.getElementById('card-pacing').classList.add('hidden'); this.pacingPct = null; return; }
 
     // 가장 최근 월 데이터만 사용 (사이드바 필터 무관)
     const allDates = Store.raw.map(r=>r.date).sort();
@@ -500,6 +534,8 @@ const UI = {
     const monthRows = Store.raw.filter(r=>r.date.startsWith(ym));
     const activeDays = new Set(monthRows.map(r=>r.date)).size;
     const tot = monthRows.reduce((a,r)=>{ a.cost+=r.cost; a.conv+=r.conv; a.rev+=r.revenue; return a; }, {cost:0,conv:0,rev:0});
+    // KPI 카드의 월예산 신호등에서 재사용할 수 있도록 월 누적 페이싱 %를 캐싱
+    this.pacingPct = { cost: t.cost>0 ? tot.cost/t.cost*100 : null };
     const proj = {
       cost: activeDays ? tot.cost/activeDays*daysInMonth : 0,
       conv: activeDays ? tot.conv/activeDays*daysInMonth : 0,
@@ -774,6 +810,8 @@ const UI = {
     document.getElementById('t-head').innerHTML =
       `<tr>${cols.map(c=>`<th>${c.label}</th>`).join('')}</tr>`;
     const dailyNotes = Notes.getAllDaily();
+    let targets;
+    try { targets = JSON.parse(localStorage.getItem('jb_targets')||'{}'); } catch(e) { targets = {}; }
     document.getElementById('t-body').innerHTML = visible.map((row,i)=>{
       const prev = visible[i+1];
       const hasNote = !!dailyNotes[row.date];
@@ -786,7 +824,15 @@ const UI = {
           const pct=(v-p)/p*100;
           badge=`<span class="badge ${pct>=0?'up':'dn'}">${pct>0?'+':''}${pct.toFixed(1)}%</span>`;
         }
-        return `<td>${fmt(c.k,v)}${badge}</td>`;
+        let tgtBadge = '';
+        if (c.k==='roas') {
+          const tl = targetLight(v, targets.roas, false);
+          if (tl) tgtBadge = `<span class="tgt-badge" title="목표 ${targets.roas}x 대비 ${tl.pct.toFixed(0)}%">${tl.icon}</span>`;
+        } else if (c.k==='cpa') {
+          const tl = targetLight(v, targets.cpa, true);
+          if (tl) tgtBadge = `<span class="tgt-badge" title="목표 ₩${targets.cpa.toLocaleString()} 대비 ${tl.pct.toFixed(0)}%">${tl.icon}</span>`;
+        }
+        return `<td>${fmt(c.k,v)}${badge}${tgtBadge}</td>`;
       }).join('')}</tr>`;
     }).join('');
   },
