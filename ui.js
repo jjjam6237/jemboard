@@ -366,6 +366,34 @@ const Ins = {
   },
 };
 
+// ── 클립보드 복사 유틸 (Briefing/Report 공용) ─────────────────────────────────
+const Clipboard = {
+  copyWithFeedback(text, btn) {
+    const feedback = ok => {
+      if (!btn) return;
+      const old = btn.textContent;
+      btn.textContent = ok ? '✅ 복사됨' : '❌ 실패';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(() => feedback(true)).catch(() => { this._fallback(text); feedback(true); });
+    } else {
+      this._fallback(text);
+      feedback(true);
+    }
+  },
+
+  // 클립보드 API 미지원 환경(구형 브라우저 등)을 위한 폴백
+  _fallback(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch(e) {}
+    document.body.removeChild(ta);
+  },
+};
+
 // ── 오늘의 브리핑 (데일리 다이제스트) ───────────────────────────────────────────
 const Briefing = {
   gen() {
@@ -429,30 +457,188 @@ const Briefing = {
   },
 
   copy(event) {
-    const text = UI._briefingPlain || '';
-    const btn = event?.currentTarget;
-    const feedback = ok => {
-      if (!btn) return;
-      const old = btn.textContent;
-      btn.textContent = ok ? '✅ 복사됨' : '❌ 실패';
-      setTimeout(() => { btn.textContent = old; }, 1500);
-    };
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(text).then(() => feedback(true)).catch(() => { this._fallbackCopy(text); feedback(true); });
-    } else {
-      this._fallbackCopy(text);
-      feedback(true);
+    Clipboard.copyWithFeedback(UI._briefingPlain || '', event?.currentTarget);
+  },
+};
+
+// HTML 문자열에서 태그만 제거한 순수 텍스트 추출 (인사이트/액션 텍스트를 리포트 평문에 쓰기 위함)
+function stripHTML(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || '';
+}
+
+// ── 리포트 생성 (원클릭 클립보드/xlsx) ────────────────────────────────────────
+const Report = {
+  mode: 'week', // week | month | custom
+
+  open()  { document.getElementById('m-report').classList.remove('hidden'); },
+  close() { document.getElementById('m-report').classList.add('hidden'); },
+
+  onPeriodChange() {
+    this.mode = document.querySelector('input[name="report-period"]:checked').value;
+    const wrap = document.getElementById('report-custom-range');
+    if (this.mode !== 'custom') { wrap.classList.add('hidden'); return; }
+    wrap.classList.remove('hidden');
+    if (!DP.instances['report-custom-range']) {
+      const dates = Store.raw.map(r=>r.date).sort();
+      const minD = dates[0]||'', maxD = dates[dates.length-1]||'';
+      DP.create('report-custom-range', { minDate: minD, maxDate: maxD, from: minD, to: maxD, onChange: () => {} });
     }
   },
 
-  // 클립보드 API 미지원 환경(구형 브라우저 등)을 위한 폴백
-  _fallbackCopy(text) {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    document.body.appendChild(ta);
-    ta.select();
-    try { document.execCommand('copy'); } catch(e) {}
-    document.body.removeChild(ta);
+  _periodLabel() { return { week:'주간', month:'월간', custom:'사용자 지정' }[this.mode] || ''; },
+
+  // 선택된 모드에 따른 {from,to}. 주간/월간은 Briefing과 동일하게 데이터의 최신일 기준(오늘 날짜 아님)
+  _range() {
+    if (this.mode === 'custom') return DP.getRange('report-custom-range');
+    const dates = Store.raw.map(r=>r.date).sort();
+    const latest = dates[dates.length-1];
+    if (!latest) return { from: null, to: null };
+    if (this.mode === 'month') return { from: latest.slice(0,7)+'-01', to: latest };
+    const from = new Date(new Date(latest+'T00:00:00').getTime() - 6*86400000).toISOString().slice(0,10);
+    return { from, to: latest };
+  },
+
+  // renderKPIs()의 기간비교 공식(ui.js _renderDimFilters 인근 기간비교 로직)과 동일 — 선택 기간과 같은 일수만큼 바로 이전 구간
+  _prevRange(from, to) {
+    const ms = d => new Date(d + 'T00:00:00').getTime();
+    const days = Math.round((ms(to) - ms(from)) / 86400000) + 1;
+    const prevTo   = new Date(ms(from) - 86400000).toISOString().slice(0,10);
+    const prevFrom = new Date(ms(from) - days * 86400000).toISOString().slice(0,10);
+    return { prevFrom, prevTo };
+  },
+
+  buildData() {
+    const { from, to } = this._range();
+    if (!from || !to) return null;
+    const { prevFrom, prevTo } = this._prevRange(from, to);
+
+    const summary     = Store.getAggForPeriod(from, to);
+    const prevSummary = Store.getAggForPeriod(prevFrom, prevTo);
+    const byMedia = Store.byDimForPeriod('media', from, to).sort((a,b)=>b.cost-a.cost);
+    const byDate  = Store.byDate().filter(r => r.date>=from && r.date<=to);
+
+    // Ins.gen()은 Store.filtered 기준 — 리포트 기간으로 잠깐 바꿔서 호출 후 원복 (동기 실행이라 화면엔 영향 없음)
+    const savedFiltered = Store.filtered;
+    Store.filtered = Store.raw.filter(r => r.date>=from && r.date<=to);
+    const insights = Ins.gen().slice(0,3);
+    Store.filtered = savedFiltered;
+
+    // 인사이트의 "반영 제안"(Ins.a()가 심어둔 <span class="ins-action">) 부분만 추출, 없으면 본문 전체 사용
+    const actionRe = /<span class="ins-action">(.*?)<\/span>/;
+    const actions = insights.map(i => {
+      const m = i.text.match(actionRe);
+      return stripHTML(m ? m[1] : i.text);
+    });
+
+    return { from, to, prevFrom, prevTo, summary, prevSummary, byMedia, byDate, insights, actions };
+  },
+
+  copyText(event) {
+    const d = this.buildData();
+    if (!d) { Clipboard.copyWithFeedback('데이터가 없습니다.', event?.currentTarget); return; }
+
+    const pct = (c,p) => p>0 ? (c-p)/p*100 : 0; // 분모 0 가드
+    const arrow = p => p>0.05?'▲':p<-0.05?'▼':'─';
+    const s = d.summary, p = d.prevSummary;
+
+    const summaryLine = `총광고비 ${fmt('cost',s.cost)} · 전환수 ${Math.round(s.conv).toLocaleString()}건 · 전환매출 ${fmt('revenue',s.revenue)} · ROAS ${fmt('roas',s.roas)} · CPA ${fmt('cpa',s.cpa)}`;
+
+    const changeLine = ['cost','conv','roas','cpa'].map(k => {
+      const v = pct(s[k], p[k]);
+      return `${METRICS[k].label} ${arrow(v)}${Math.abs(v).toFixed(1)}%`;
+    }).join(' · ');
+
+    const mediaHeader = ['매체','광고비','전환','ROAS','CPA'].join('\t');
+    const mediaRows = d.byMedia.map(m =>
+      [m.media||'(미지정)', fmt('cost',m.cost), Math.round(m.conv), fmt('roas',m.roas), fmt('cpa',m.cpa)].join('\t'));
+
+    const insightsBlock = d.insights.length
+      ? d.insights.map((i,idx)=>`${idx+1}. ${stripHTML(i.text)}`).join('\n')
+      : '데이터가 부족합니다.';
+    const actionsBlock = d.actions.length
+      ? d.actions.map((a,idx)=>`${idx+1}. ${a}`).join('\n')
+      : '특이사항 없음.';
+
+    const text = [
+      `📊 ${this._periodLabel()} 성과 리포트 (${d.from} ~ ${d.to})`, '',
+      '■ 핵심 요약', summaryLine, '',
+      `■ 전기간 대비 증감 (vs ${d.prevFrom}~${d.prevTo})`, changeLine, '',
+      '■ 매체별 성과', mediaHeader, ...mediaRows, '',
+      '■ 인사이트 Top 3', insightsBlock, '',
+      '■ 액션 플랜', actionsBlock,
+    ].join('\n');
+
+    Clipboard.copyWithFeedback(text, event?.currentTarget);
+  },
+
+  async downloadXlsx() {
+    const d = this.buildData();
+    if (!d) return;
+    const wb = new ExcelJS.Workbook();
+    ReportLayout.standard(wb, d, this._periodLabel());
+    const buffer = await wb.xlsx.writeBuffer();
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })),
+      download: `report_${d.from}_${d.to}.xlsx`,
+    });
+    a.click();
+  },
+};
+
+// xlsx 시트 레이아웃 — Report와 분리해두면 실무 양식 파일이 오는 대로 이 함수만 교체/추가하면 됨
+const ReportLayout = {
+  standard(wb, d, periodLabel) {
+    const pct = (c,p) => p>0 ? (c-p)/p*100 : 0; // 분모 0 가드
+
+    // 1. 요약 시트
+    const ws1 = wb.addWorksheet('요약');
+    ws1.columns = [{width:14},{width:18},{width:18}];
+    ws1.addRow([`${periodLabel} 성과 리포트`, `${d.from} ~ ${d.to}`]);
+    ws1.addRow([]);
+    ws1.addRow(['지표','값','전기간 대비 증감']);
+    [['cost','광고비','"₩"#,##0'],['conv','전환수','#,##0'],['revenue','전환매출','"₩"#,##0'],
+     ['roas','ROAS','0.00"x"'],['cpa','CPA','"₩"#,##0']].forEach(([key,label,numFmt]) => {
+      const row = ws1.addRow([label, d.summary[key], pct(d.summary[key], d.prevSummary[key])/100]);
+      row.getCell(2).numFmt = numFmt;
+      row.getCell(3).numFmt = '0.0%';
+    });
+    ws1.getRow(1).font = { bold: true };
+    ws1.getRow(3).font = { bold: true };
+
+    // 2. 매체별 시트
+    const ws2 = wb.addWorksheet('매체별');
+    ws2.columns = [
+      { header:'매체', key:'media', width:14 }, { header:'노출수', key:'impr', width:12 },
+      { header:'클릭수', key:'clicks', width:12 }, { header:'CTR', key:'ctr', width:10 },
+      { header:'광고비', key:'cost', width:14 }, { header:'CPC', key:'cpc', width:12 },
+      { header:'전환수', key:'conv', width:10 }, { header:'CPA', key:'cpa', width:14 },
+      { header:'전환매출', key:'revenue', width:14 }, { header:'ROAS', key:'roas', width:10 },
+    ];
+    d.byMedia.forEach(m => ws2.addRow({ media:m.media||'(미지정)', impr:m.impr, clicks:m.clicks,
+      ctr:m.ctr/100, cost:m.cost, cpc:m.cpc, conv:m.conv, cpa:m.cpa, revenue:m.revenue, roas:m.roas }));
+    ws2.getColumn('ctr').numFmt = '0.00%';
+    ['cost','cpc','cpa','revenue'].forEach(k => ws2.getColumn(k).numFmt = '"₩"#,##0');
+    ws2.getColumn('roas').numFmt = '0.00"x"';
+    ws2.getRow(1).font = { bold: true };
+
+    // 3. 일별 시트 — Store.exportCSV()와 동일 컬럼셋
+    const ws3 = wb.addWorksheet('일별');
+    ws3.columns = [
+      { header:'날짜', key:'date', width:12 }, { header:'노출수', key:'impr', width:12 },
+      { header:'클릭수', key:'clicks', width:12 }, { header:'CTR', key:'ctr', width:10 },
+      { header:'광고비', key:'cost', width:14 }, { header:'CPC', key:'cpc', width:12 },
+      { header:'전환수', key:'conv', width:10 }, { header:'CPA', key:'cpa', width:14 },
+      { header:'전환매출', key:'revenue', width:14 }, { header:'ROAS', key:'roas', width:10 },
+      { header:'GA전환', key:'gaConv', width:10 }, { header:'GA매출', key:'gaRev', width:14 },
+      { header:'앱설치', key:'appInstall', width:10 },
+    ];
+    d.byDate.forEach(r => ws3.addRow({ ...r, ctr:r.ctr/100 }));
+    ws3.getColumn('ctr').numFmt = '0.00%';
+    ['cost','cpc','cpa','revenue','gaRev'].forEach(k => ws3.getColumn(k).numFmt = '"₩"#,##0');
+    ws3.getColumn('roas').numFmt = '0.00"x"';
+    ws3.getRow(1).font = { bold: true };
   },
 };
 

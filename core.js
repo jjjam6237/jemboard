@@ -250,6 +250,26 @@ const Store = {
   byDateMedia() { return this.byDateDim('media'); },
   byDateDevice(){ return this.byDateDim('device'); },
 
+  // getAggForPeriod(기간 필터)과 byDim(차원별 그룹)을 합친 버전.
+  // this.filtered(사이드바 필터 상태)를 건드리지 않고 임의 기간 × 차원 조합을 조회할 때 사용 (예: 리포트 생성)
+  byDimForPeriod(field, from, to, dimFilters = {}) {
+    const rows = this.raw.filter(r => {
+      if (from && r.date < from) return false;
+      if (to   && r.date > to)   return false;
+      for (const [f, vals] of Object.entries(dimFilters)) {
+        if (vals?.length && !vals.includes(r[f])) return false;
+      }
+      return true;
+    });
+    const m = {};
+    rows.forEach(r => {
+      const k = r[field] || '';
+      if (!m[k]) m[k] = { ...emptyAgg(k), [field]: k };
+      accumulate(m[k], r);
+    });
+    return Object.values(m).map(d => { derived(d); return d; });
+  },
+
   exportCSV() {
     const bd = this.byDate();
     const cols = ['날짜','노출수','클릭수','CTR(%)','광고비','CPC','전환수','CPA','전환매출','ROAS','GA전환','GA매출','앱설치'];

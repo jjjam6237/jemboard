@@ -6,6 +6,7 @@
   <title>잼시보드</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4/dist/exceljs.min.js"></script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -29,6 +30,7 @@
     <span class="file-name" id="data-range" style="display:none;"></span>
     <span class="file-name" id="saved-info" style="color:var(--green);"></span>
     <button class="btn btn-secondary btn-sm csv-btn" onclick="Store.exportCSV()">⬇ CSV</button>
+    <button class="btn btn-secondary btn-sm" onclick="Report.open()">📊 리포트</button>
     <button id="schema-badge" class="btn btn-secondary btn-sm hidden admin-btn" onclick="MappingUI.open()" style="font-size:11px;">✓ 매핑</button>
     <button class="btn btn-secondary btn-sm hidden admin-btn" id="btn-reset" onclick="JBStorage.clearAll()" style="color:var(--red);">× 초기화</button>
     <button class="btn btn-secondary btn-sm hidden admin-btn" id="btn-deploy" onclick="Deployer.open()" style="color:#a78bfa;border-color:#7c3aed33;">⚙ 배포설정</button>
@@ -512,6 +514,25 @@
     <div class="modal-actions" id="deploy-actions">
       <button class="btn btn-secondary" onclick="Deployer.close()">취소</button>
       <button class="btn btn-primary" onclick="Deployer.deploy()" style="background:#7c3aed;">☁ 저장 & 배포</button>
+    </div>
+  </div>
+</div>
+
+<!-- 리포트 생성 모달 -->
+<div id="m-report" class="overlay hidden" onclick="if(event.target===this)Report.close()">
+  <div class="modal" style="width:420px;">
+    <div class="modal-title">📊 리포트 생성</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">기간 선택</div>
+    <div class="report-period-group">
+      <label><input type="radio" name="report-period" value="week" checked onchange="Report.onPeriodChange()"> 주간 (최근 7일)</label>
+      <label><input type="radio" name="report-period" value="month" onchange="Report.onPeriodChange()"> 월간 (이번달)</label>
+      <label><input type="radio" name="report-period" value="custom" onchange="Report.onPeriodChange()"> 사용자 지정</label>
+    </div>
+    <div id="report-custom-range" class="hidden" style="margin-bottom:12px;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="Report.close()">취소</button>
+      <button class="btn btn-secondary" onclick="Report.copyText(event)">📋 클립보드 복사</button>
+      <button class="btn btn-primary" onclick="Report.downloadXlsx()">⬇ xlsx 다운로드</button>
     </div>
   </div>
 </div>
