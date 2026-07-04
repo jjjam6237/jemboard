@@ -366,6 +366,96 @@ const Ins = {
   },
 };
 
+// ── 오늘의 브리핑 (데일리 다이제스트) ───────────────────────────────────────────
+const Briefing = {
+  gen() {
+    const bd = Store.byDate();
+    if (bd.length < 2) {
+      return {
+        html: `<div class="briefing-empty">데이터가 부족합니다 (최소 2일치 데이터 필요)</div>`,
+        plain: '오늘의 브리핑: 데이터가 부족합니다 (최소 2일치 데이터 필요).',
+      };
+    }
+
+    const y = bd[bd.length-1], d2 = bd[bd.length-2];
+    const last7 = bd.slice(-7);
+    const avg = k => last7.reduce((s,r)=>s+(r[k]||0),0) / last7.length;
+
+    // ① 어제 vs 그제 / 최근 7일 평균 변화 (분모 0 가드)
+    const pctChange = (c,p) => p>0 ? (c-p)/p*100 : 0;
+    const arrow = p => p>0.05?'▲':p<-0.05?'▼':'─';
+    const metricLabel = { cost:'광고비', conv:'전환수', roas:'ROAS' };
+    const changeParts = ['cost','conv','roas'].map(k => {
+      const vsD2 = pctChange(y[k], d2[k]);
+      const vsAvg = pctChange(y[k], avg(k));
+      const val = k==='conv' ? Math.round(y[k]).toLocaleString()+'건' : fmt(k, y[k]);
+      return `${metricLabel[k]} ${val}(그제 대비 ${arrow(vsD2)}${Math.abs(vsD2).toFixed(1)}%, 7일평균 대비 ${arrow(vsAvg)}${Math.abs(vsAvg).toFixed(1)}%)`;
+    });
+    const changeText = `📅 어제(${y.date}) 실적 — ${changeParts.join(' · ')}`;
+
+    // ② 이상탐지 요약 — 최근 3일 내 발생한 것만 (기존 AnUI._detectAnomalies 재사용, win=7일 sigma=2)
+    const recentDates = bd.slice(-3).map(r=>r.date);
+    const anomalies = ['cost','conv','roas'].flatMap(k =>
+      AnUI._detectAnomalies(k, 7, 2).filter(a=>recentDates.includes(a.date)).map(a=>({...a, k}))
+    ).sort((a,b)=>Math.abs(b.zScore)-Math.abs(a.zScore));
+    const anomalyText = anomalies.length
+      ? `⚠️ 최근 3일 내 이상 징후 ${anomalies.length}건 — 가장 두드러진 건: ${anomalies[0].date} ${metricLabel[anomalies[0].k]}가 평소 대비 ${anomalies[0].zScore>0?'급등':'급락'}(z=${anomalies[0].zScore.toFixed(1)})했습니다.`
+      : '🟢 최근 3일간 뚜렷한 이상 징후는 감지되지 않았습니다.';
+
+    // ③ 목표 페이싱 경고 — STEP1 renderPacing()이 캐싱한 UI.pacingStatus 재사용
+    const statuses = UI.pacingStatus || [];
+    const worst = statuses.length ? statuses.reduce((a,b)=>a.projPace<b.projPace?a:b) : null;
+    const pacingText = !worst
+      ? 'ℹ️ 목표 KPI가 설정되어 있지 않습니다. 사이드바 "월 목표 설정"에서 입력하면 페이싱 경고를 볼 수 있습니다.'
+      : worst.projPace >= 100
+        ? `🟢 현재 페이스로는 설정된 목표를 모두 달성할 전망입니다 (${worst.label} 기준 예상 ${worst.projPace}%).`
+        : `⚠️ 이 페이스라면 ${worst.label} 목표의 월말 예상 달성률은 ${worst.projPace}%에 그칠 전망입니다.`;
+
+    // ④ 최우선 액션 — 이상탐지 > 페이싱 경고 > 안정 순 우선순위
+    let action;
+    if (anomalies[0] && Math.abs(anomalies[0].zScore) >= 2.5) {
+      action = `${anomalies[0].date} ${metricLabel[anomalies[0].k]}에 이례적 변화가 감지됐습니다. 원인을 확인하세요.`;
+    } else if (worst && worst.projPace < 90) {
+      action = `이 페이스면 ${worst.label} 목표의 ${worst.projPace}%만 달성할 전망입니다. 예산/전략 조정을 검토하세요.`;
+    } else {
+      action = '특이사항 없음 — 현재 전략을 유지하며 모니터링하세요.';
+    }
+    const actionText = `💡 최우선 액션: ${action}`;
+
+    const lines = [changeText, anomalyText, pacingText, actionText];
+    const html = lines.map(l => `<div class="briefing-line">${l}</div>`).join('');
+    const plain = ['📰 오늘의 브리핑', ...lines].join('\n');
+    return { html, plain };
+  },
+
+  copy(event) {
+    const text = UI._briefingPlain || '';
+    const btn = event?.currentTarget;
+    const feedback = ok => {
+      if (!btn) return;
+      const old = btn.textContent;
+      btn.textContent = ok ? '✅ 복사됨' : '❌ 실패';
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(() => feedback(true)).catch(() => { this._fallbackCopy(text); feedback(true); });
+    } else {
+      this._fallbackCopy(text);
+      feedback(true);
+    }
+  },
+
+  // 클립보드 API 미지원 환경(구형 브라우저 등)을 위한 폴백
+  _fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch(e) {}
+    document.body.removeChild(ta);
+  },
+};
+
 // 목표 달성률 → 신호등. lowerBetter=true(예: CPA)면 target/actual로 역산해 "낮을수록 좋음"을 반영.
 // target이 0/미입력이면 null 반환 → 호출부에서 신호등 숨김 처리.
 function targetLight(actual, target, lowerBetter = false) {
@@ -382,6 +472,7 @@ const UI = {
     document.getElementById('main').classList.remove('hidden');
     this.renderSidebar();
     this.renderPacing();
+    this.renderBriefing();
     this.renderKPIs();
     this.renderWeekCompare();
     this.renderMonthCompare();
@@ -392,6 +483,12 @@ const UI = {
     this.renderTable();
     this.updateDataRange();
     Notes.initEditor();
+  },
+
+  renderBriefing() {
+    const b = Briefing.gen();
+    document.getElementById('briefing-body').innerHTML = b.html;
+    this._briefingPlain = b.plain;
   },
 
   renderSidebar() {
@@ -504,6 +601,7 @@ const UI = {
     };
     localStorage.setItem('jb_targets', JSON.stringify(t));
     this.renderPacing();
+    this.renderBriefing();
     this.renderKPIs();
     this.renderTable();
   },
@@ -523,7 +621,7 @@ const UI = {
   renderPacing() {
     let t;
     try { t = JSON.parse(localStorage.getItem('jb_targets')||'{}'); } catch(e) { t = {}; }
-    if (!t.cost && !t.conv && !t.rev) { document.getElementById('card-pacing').classList.add('hidden'); this.pacingPct = null; return; }
+    if (!t.cost && !t.conv && !t.rev) { document.getElementById('card-pacing').classList.add('hidden'); this.pacingPct = null; this.pacingStatus = []; return; }
 
     // 가장 최근 월 데이터만 사용 (사이드바 필터 무관)
     const allDates = Store.raw.map(r=>r.date).sort();
@@ -543,9 +641,9 @@ const UI = {
     };
 
     const items = [
-      { icon:'💰', label:'광고비',   actual:tot.cost, target:t.cost, projected:proj.cost, unit:'₩' },
-      { icon:'🎯', label:'전환수',   actual:tot.conv, target:t.conv, projected:proj.conv, unit:''  },
-      { icon:'📈', label:'전환매출', actual:tot.rev,  target:t.rev,  projected:proj.rev,  unit:'₩' },
+      { key:'cost', icon:'💰', label:'광고비',   actual:tot.cost, target:t.cost, projected:proj.cost, unit:'₩' },
+      { key:'conv', icon:'🎯', label:'전환수',   actual:tot.conv, target:t.conv, projected:proj.conv, unit:''  },
+      { key:'rev',  icon:'📈', label:'전환매출', actual:tot.rev,  target:t.rev,  projected:proj.rev,  unit:'₩' },
     ].filter(x=>x.target>0);
 
     const fmtV = (v, unit) => {
@@ -575,6 +673,8 @@ const UI = {
     document.getElementById('pacing-title').innerHTML =
       `📊 월별 KPI 달성 현황 <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:4px;">${monthLabel}</span>`;
 
+    // 오늘의 브리핑(Briefing.gen)의 목표 페이싱 경고에서 재사용할 수 있도록 항목별 페이싱/예상달성률 캐싱
+    const statuses = [];
     document.getElementById('card-pacing').classList.remove('hidden');
     document.getElementById('pacing-body').innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(${items.length},1fr);gap:14px;padding:6px 2px;">
@@ -582,6 +682,7 @@ const UI = {
           const p = x.target>0 ? x.actual/x.target*100 : 0;
           const projP = x.target>0 ? Math.round(x.projected/x.target*100) : 0;
           const c = arcColor(p);
+          statuses.push({ key:x.key, label:x.label, actual:x.actual, target:x.target, pace:p, projPace:projP });
           return `<div style="background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:18px 14px;text-align:center;">
             <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:14px;">${x.icon} ${x.label}</div>
             <div style="position:relative;display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px;">
@@ -597,6 +698,7 @@ const UI = {
         }).join('')}
       </div>
       <div class="pacing-detail" style="font-size:10px;color:var(--muted);text-align:right;margin-top:4px;">* ${activeDays}일 기준 예상 / ${monthLabel} 전체 ${daysInMonth}일</div>`;
+    this.pacingStatus = statuses;
   },
 
   _aggRange(from, to) {

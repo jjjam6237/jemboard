@@ -103,6 +103,18 @@
   </aside>
 
   <main class="content">
+    <!-- 오늘의 브리핑 -->
+    <div class="chart-card collapsible" id="card-briefing">
+      <div class="card-title-row">
+        <div class="title-left">📰 오늘의 브리핑</div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button class="btn btn-secondary btn-sm" onclick="Briefing.copy(event)">📋 복사</button>
+          <button class="collapse-btn" onclick="UI.toggleCard('card-briefing')">−</button>
+        </div>
+      </div>
+      <div class="chart-body" id="briefing-body"></div>
+    </div>
+
     <div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
       <button class="compare-toggle" id="btn-compare" onclick="UI.toggleCompare(this)">⚖ 기간 비교</button>
     </div>
