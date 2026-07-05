@@ -74,6 +74,41 @@ const CH = {
     };
   },
 
+  // 운영 일지 메모가 있는 날짜에 세로 점선 마커를 그리는 afterDraw 플러그인.
+  // dateArr는 이 차트가 실제로 쓰는 날짜 배열(x축 인덱스와 1:1 대응)이어야 함 —
+  // c-dod는 bd.slice(-15)만 쓰므로 bd 전체를 넘기면 인덱스가 어긋난다.
+  noteMarkerPlugin(dateArr) {
+    return {
+      id: 'noteMarkers',
+      afterDraw(chart) {
+        const { ctx, chartArea: { top, bottom }, scales } = chart;
+        dateArr.forEach((r, idx) => {
+          if (!Notes.getDaily(r.date).text) return;
+          const px = scales.x.getPixelForValue(idx);
+          ctx.save();
+          ctx.strokeStyle = '#f39c1290';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, bottom); ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = '#f39c12';
+          ctx.beginPath(); ctx.arc(px, top + 4, 2.5, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        });
+      },
+    };
+  },
+
+  // 메모/태그를 Chart.js 기본 tooltip.callbacks.afterBody에 그대로 꽂는 헬퍼.
+  noteTooltipAfterBody(dateArr) {
+    return (items) => {
+      const r = dateArr[items[0]?.dataIndex];
+      const note = r && Notes.getDaily(r.date);
+      if (!note?.text) return [];
+      return [`📝 ${note.tag ? '[' + note.tag + '] ' : ''}${note.text}`];
+    };
+  },
+
   renderAll() {
     const bd = Store.byDate();
     this.renderTrend(bd);
@@ -89,7 +124,11 @@ const CH = {
     this.trend = new Chart(document.getElementById('c-trend'), {
       type: 'line',
       data: { labels, datasets: [{ label: METRICS[m]?.label || m, data, borderColor: '#4c9eff', backgroundColor:'#4c9eff18', tension:0.4, pointRadius: bd.length>30?0:3, fill:true, borderWidth:2 }] },
-      options: this.co(),
+      plugins: [this.noteMarkerPlugin(bd)],
+      options: this.co({ plugins: {
+        legend: { labels: { color: '#8b90a0', font:{size:11}, boxWidth:10 } },
+        tooltip: { mode:'index', intersect:false, callbacks: { afterBody: this.noteTooltipAfterBody(bd) } },
+      } }),
     });
   },
 
@@ -175,6 +214,8 @@ const CH = {
       labels.push(recent[i].date.slice(5));
       changes.push(p===0?0:parseFloat(((c-p)/p*100).toFixed(1)));
     }
+    // 위 루프가 i=1부터 시작해 recent[0]을 건너뛰므로, x축 인덱스는 recent가 아니라 recent.slice(1)과 대응한다.
+    const plotDates = recent.slice(1);
     if (this.dod) this.dod.destroy();
     this.dod = new Chart(document.getElementById('c-dod'), {
       type: 'bar',
@@ -182,8 +223,12 @@ const CH = {
         backgroundColor:changes.map(v=>v>=0?'#2ecc7188':'#e74c3c88'),
         borderColor:changes.map(v=>v>=0?'#2ecc71':'#e74c3c'),
         borderWidth:1, borderRadius:3 }] },
+      plugins: [this.noteMarkerPlugin(plotDates)],
       options: this.co({
-        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.y.toFixed(1)+'%'}}},
+        plugins:{legend:{display:false},tooltip:{callbacks:{
+          label:ctx=>ctx.parsed.y.toFixed(1)+'%',
+          afterBody:this.noteTooltipAfterBody(plotDates),
+        }}},
         scales:{
           x:{ticks:{color:'#8b90a0',font:{size:9}},grid:{display:false}},
           y:{ticks:{color:'#8b90a0',font:{size:10},callback:v=>v+'%'},grid:{color:'#2a2d3e'}},
@@ -1102,10 +1147,12 @@ const UI = {
     try { targets = JSON.parse(localStorage.getItem('jb_targets')||'{}'); } catch(e) { targets = {}; }
     document.getElementById('t-body').innerHTML = visible.map((row,i)=>{
       const prev = visible[i+1];
-      const hasNote = !!dailyNotes[row.date];
-      const noteTitle = hasNote ? dailyNotes[row.date].replace(/"/g,'&quot;') : '메모 추가';
+      const note = dailyNotes[row.date];
+      const hasNote = !!note?.text;
+      const noteTitle = hasNote ? note.text.replace(/"/g,'&quot;') : '메모 추가';
+      const tagPill = hasNote && note.tag ? `<span class="note-tag">${note.tag.replace(/"/g,'&quot;')}</span>` : '';
       return `<tr>${cols.map(c=>{
-        if (c.k==='date') return `<td>${row.date}<button class="memo-btn admin-btn${hasNote?' has-note':''}" onclick="Notes.openModal('${row.date}')" title="${noteTitle}">📝</button></td>`;
+        if (c.k==='date') return `<td>${row.date}<button class="memo-btn admin-btn${hasNote?' has-note':''}" onclick="Notes.openModal('${row.date}')" title="${noteTitle}">📝</button>${tagPill}</td>`;
         const v=row[c.k]||0, p=prev?.[c.k]||0;
         let badge='';
         if (prev&&p>0) {
@@ -2264,17 +2311,30 @@ const Notes = {
     this._save(d);
   },
 
-  setDaily(date, text) {
+  setDaily(date, text, tag = '') {
     const d = this._load();
     if (!d.daily) d.daily = {};
-    if (text.trim()) d.daily[date] = text;
+    if (text.trim()) d.daily[date] = { text, tag, updatedAt: Date.now() };
     else delete d.daily[date];
     this._save(d);
   },
 
+  // 과거 문자열 형태(`d.daily[date]`가 string)로 저장된 메모를 읽을 때 즉시 객체로 변환.
+  // 배치 마이그레이션 없이 read 시점에만 처리 — 저장 형식은 저장할 때만 갱신됨.
+  _normalizeNote(raw) {
+    if (!raw) return { text: '', tag: '', updatedAt: null };
+    if (typeof raw === 'string') return { text: raw, tag: '', updatedAt: null };
+    return { text: raw.text || '', tag: raw.tag || '', updatedAt: raw.updatedAt ?? null };
+  },
+
   getReport()       { return this._load().report || ''; },
-  getDaily(date)    { return (this._load().daily || {})[date] || ''; },
-  getAllDaily()      { return this._load().daily || {}; },
+  getDaily(date)    { return this._normalizeNote((this._load().daily || {})[date]); },
+  getAllDaily() {
+    const daily = this._load().daily || {};
+    const out = {};
+    Object.entries(daily).forEach(([date, raw]) => { out[date] = this._normalizeNote(raw); });
+    return out;
+  },
   getData()         { return this._load(); },
 
   onReportInput(el) {
@@ -2295,23 +2355,32 @@ const Notes = {
 
   openModal(date) {
     this._editDate = date;
+    const note = this.getDaily(date);
     document.getElementById('note-modal-date').textContent = date;
-    document.getElementById('note-modal-ta').value = this.getDaily(date);
+    document.getElementById('note-modal-tag').value = note.tag;
+    document.getElementById('note-modal-ta').value = note.text;
     document.getElementById('m-note').classList.remove('hidden');
     setTimeout(() => document.getElementById('note-modal-ta').focus(), 80);
   },
 
   saveModal() {
     const text = document.getElementById('note-modal-ta').value;
-    this.setDaily(this._editDate, text);
+    const tag = document.getElementById('note-modal-tag').value.trim();
+    this.setDaily(this._editDate, text, tag);
     document.getElementById('m-note').classList.add('hidden');
     UI.renderTable();
+    CH.renderTrend(Store.byDate());
+    CH.renderDoD(Store.byDate());
+    Deployer.autoDeploy();
   },
 
   deleteModal() {
     this.setDaily(this._editDate, '');
     document.getElementById('m-note').classList.add('hidden');
     UI.renderTable();
+    CH.renderTrend(Store.byDate());
+    CH.renderDoD(Store.byDate());
+    Deployer.autoDeploy();
   },
 
   closeModal() { document.getElementById('m-note').classList.add('hidden'); },
@@ -2324,7 +2393,10 @@ const Notes = {
     const entries = Object.entries(daily).sort(([a],[b]) => a > b ? 1 : -1);
     if (entries.length) {
       text += `\n=== 일별 메모 (${entries.length}건) ===\n`;
-      entries.forEach(([date, note]) => { text += `[${date}] ${note}\n`; });
+      entries.forEach(([date, raw]) => {
+        const note = this._normalizeNote(raw);
+        text += `[${date}] ${note.tag ? '(' + note.tag + ') ' : ''}${note.text}\n`;
+      });
     }
     const a = Object.assign(document.createElement('a'), {
       href: URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/plain;charset=utf-8' })),

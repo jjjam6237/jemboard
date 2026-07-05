@@ -334,6 +334,7 @@
     .memo-btn { background: none; border: 1px solid transparent; border-radius: 4px; width: 20px; height: 20px; cursor: pointer; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; transition: all .12s; vertical-align: middle; margin-left: 5px; line-height: 1; color: var(--muted); }
     .memo-btn:hover { background: var(--hover); border-color: var(--blue); color: var(--blue); }
     .memo-btn.has-note { border-color: rgba(243,156,18,.5); color: var(--orange); background: rgba(243,156,18,.1); }
+    .note-tag { font-size: 10px; margin-left: 4px; padding: 1px 6px; border-radius: 3px; background: rgba(243,156,18,.1); color: var(--orange); white-space: nowrap; }
 
     /* ── 분석 탭 ── */
     .an-page { max-width: 1100px; margin: 0 auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 20px; }

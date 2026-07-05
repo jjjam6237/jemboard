@@ -544,6 +544,8 @@
       <div class="modal-title" style="margin:0;">📝 <span id="note-modal-date" style="font-weight:400;font-size:14px;color:var(--muted);"></span> 메모</div>
       <button onclick="Notes.closeModal()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted);">✕</button>
     </div>
+    <input type="text" class="f-input" id="note-modal-tag" style="margin-bottom:8px;"
+      placeholder="예: 입찰가 20% 상향, 프로모션 시작">
     <textarea class="note-modal-ta" id="note-modal-ta" rows="5"
       placeholder="이날의 특이사항, 조치사항, 인사이트 등을 기록하세요...&#10;(예: 네이버 입찰가 +15% 조정 / 주말 효과로 CPC 하락 / 이벤트 집행일)"
       onkeydown="if(event.key==='Enter'&&event.ctrlKey)Notes.saveModal()"></textarea>
