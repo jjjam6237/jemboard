@@ -1539,15 +1539,28 @@ function switchTab(tab) {
 
 // ── KW STORE ───────────────────────────────────────────────────────────────────
 const KWStore = {
-  // raw: { keyword, media, route, device, daily: {'YYYY-MM-DD': {impr,clicks,cost,conv,revenue}} }
+  // raw: { key, keyword, media, [...dimDefs.key]: value, daily: {'YYYY-MM-DD': {impr,clicks,cost,conv,revenue}} }
   raw: [], filtered: [],
   dims: {}, dimFilters: {}, allDates: [],
+  dimDefs: [{key:'route',label:'노선'},{key:'device',label:'디바이스'}],
   dateFrom: null, dateTo: null,
   sortKey: 'cost', sortDir: -1,
   search: '', page: 1, perPage: 50,
+  _isAggregated: false, actionQueue: null,
+
+  GRADE_META: {
+    scale:  { label:'확장', color:'#16a34a' },
+    watch:  { label:'유지', color:'#d97706' },
+    review: { label:'점검', color:'#dc2626' },
+    none:   { label:'-',    color:'#9ca3af' },
+  },
+  gradeCfg() {
+    try { return { scaleRoas:3, watchRoas:1, ...JSON.parse(localStorage.getItem('jb_kw_grade')||'{}') }; }
+    catch(e) { return { scaleRoas:3, watchRoas:1 }; }
+  },
 
   _detectDims(rows) {
-    const dimFields = ['media', 'route', 'device'];
+    const dimFields = ['media', ...this.dimDefs.map(d => d.key)];
     this.dims = {};
     dimFields.forEach(f => {
       const vals = [...new Set(rows.map(r => r[f]).filter(Boolean))].sort();
@@ -1556,8 +1569,10 @@ const KWStore = {
     this.dimFilters = {};
   },
 
-  load(rawMap) {
-    this.raw = Object.values(rawMap);
+  load(rawMap, dims) {
+    this._isAggregated = false;
+    this.dimDefs = dims !== undefined ? dims : [{key:'route',label:'노선'},{key:'device',label:'디바이스'}];
+    this.raw = Object.entries(rawMap).map(([key, r]) => ({ ...r, key }));
     const dateSet = new Set();
     this.raw.forEach(r => Object.keys(r.daily||{}).forEach(d => dateSet.add(d)));
     this.allDates = [...dateSet].sort();
@@ -1568,29 +1583,25 @@ const KWStore = {
   },
 
   // 배포된 데이터(이미 집계된 rows 배열) 로드
-  loadAggregated(rows, dateFrom, dateTo) {
+  loadAggregated(rows, dateFrom, dateTo, dims, actionQueue) {
     this._isAggregated = true;
-    this.raw = rows;
-    this.filtered = [...rows];
+    this.dimDefs = dims !== undefined ? dims : [{key:'route',label:'노선'},{key:'device',label:'디바이스'}];
+    // 구버전 kw_data.json(리팩터 이전 배포분)은 rows에 key가 없음 — 렌더링/식별 안 깨지게 즉석 생성.
+    this.raw = rows.map(r => r.key ? r : { ...r, key: [r.keyword, r.media, ...this.dimDefs.map(d=>r[d.key])].join('__') });
+    this.filtered = [...this.raw];
     this.allDates = [];
     this.dateFrom = dateFrom || null;
     this.dateTo   = dateTo   || null;
-    this._detectDims(rows);
+    this.actionQueue = actionQueue || null;
+    this._detectDims(this.raw);
     this.applyFilter();
   },
 
   _agg(r) {
-    const tot = {impr:0, clicks:0, cost:0, conv:0, revenue:0};
-    Object.entries(r.daily||{}).forEach(([d,v]) => {
-      if ((!this.dateFrom || d >= this.dateFrom) && (!this.dateTo || d <= this.dateTo)) {
-        tot.impr+=v.impr; tot.clicks+=v.clicks; tot.cost+=v.cost; tot.conv+=v.conv; tot.revenue+=v.revenue;
-      }
-    });
-    tot.ctr  = tot.impr>0   ? tot.clicks/tot.impr*100 : 0;
-    tot.cpc  = tot.clicks>0 ? tot.cost/tot.clicks     : 0;
-    tot.cpa  = tot.conv>0   ? tot.cost/tot.conv        : 0;
-    tot.roas = tot.cost>0   ? tot.revenue/tot.cost     : 0;
-    return { keyword:r.keyword, media:r.media, route:r.route, device:r.device, ...tot };
+    const tot = sumDaily(r.daily, this.dateFrom, this.dateTo);
+    const dimVals = {};
+    this.dimDefs.forEach(d => { dimVals[d.key] = r[d.key]; });
+    return { key:r.key, keyword:r.keyword, media:r.media, ...dimVals, ...tot };
   },
 
   applyFilter() {
@@ -1614,21 +1625,21 @@ const KWStore = {
   },
 
   grade(r) {
+    const cfg = this.gradeCfg();
     if (r.cost === 0) return 'none';
     if (r.conv === 0) return 'review';
-    if (r.roas >= 3) return 'scale';
-    if (r.roas >= 1) return 'watch';
+    if (r.roas >= cfg.scaleRoas) return 'scale';
+    if (r.roas >= cfg.watchRoas) return 'watch';
     return 'review';
   },
 
   exportCSV() {
-    const cols = ['키워드','매체','노선','디바이스','노출','클릭','CTR(%)','광고비','CPC','전환','CPA','전환매출','ROAS','등급'];
-    const gradeLabel = { scale:'확장', watch:'유지', review:'점검', none:'-' };
+    const cols = ['키워드','매체', ...this.dimDefs.map(d=>d.label), '노출','클릭','CTR(%)','광고비','CPC','전환','CPA','전환매출','ROAS','등급'];
     const rows = this.filtered.map(r => [
-      r.keyword, r.media, r.route, r.device,
+      r.keyword, r.media, ...this.dimDefs.map(d=>r[d.key]||''),
       r.impr, r.clicks, r.ctr.toFixed(2), Math.round(r.cost),
       Math.round(r.cpc), r.conv, Math.round(r.cpa), Math.round(r.revenue),
-      r.roas.toFixed(2), gradeLabel[this.grade(r)]
+      r.roas.toFixed(2), this.GRADE_META[this.grade(r)].label
     ]);
     const csv = '﻿' + [cols, ...rows].map(r=>r.join(',')).join('\n');
     const a = Object.assign(document.createElement('a'), {
@@ -1640,9 +1651,11 @@ const KWStore = {
 };
 
 // ── KW PARSER ──────────────────────────────────────────────────────────────────
+// 임의 광고주 포맷 지원: 워크북의 모든 시트를 순회하되 '키워드' 후보 컬럼이 있는
+// 시트만 파싱 대상으로 삼는다. 컬럼 자동 감지가 실패하면 KWMappingUI로 수동 매핑을
+// 받고(그 결과는 헤더 시그니처별로 localStorage에 캐시), 매핑 후 나머지 텍스트
+// 컬럼은 전부 동적 차원(dims)으로 취급한다.
 const KWParser = {
-  SHEET_MEDIA: { 'N_통합':'네이버', 'G_통합':'구글', 'K_통합':'카카오', 'D_통합':'당근' },
-
   load(file) {
     if (!file) return;
     KWUI.hideUpload();
@@ -1652,49 +1665,7 @@ const KWParser = {
       setTimeout(() => {
         try {
           const wb = XLSX.read(e.target.result, { type:'array', cellDates:false });
-          // key: `keyword__media__route__device`, value: { ..., daily: { date: {impr,clicks,cost,conv,revenue} } }
-          const kwMap = {};
-          const pn = v => (typeof v === 'number' ? v : parseFloat(String(v||'').replace(/,/g,''))||0);
-
-          for (const [sheetName, mediaLabel] of Object.entries(this.SHEET_MEDIA)) {
-            const ws = wb.Sheets[sheetName];
-            if (!ws) continue;
-            const all = XLSX.utils.sheet_to_json(ws, { header:1, raw:true, defval:null });
-            if (all.length < 2) continue;
-            const header = all[0] || [];
-            const col = {};
-            header.forEach((n,i) => { col[String(n||'').trim()] = i; });
-            if (col['키워드'] === undefined) continue;
-
-            for (let i = 1; i < all.length; i++) {
-              const r = all[i] || [];
-              const kw = String(r[col['키워드']] || '').trim();
-              if (!kw || kw === '합계' || kw === '필터구간') continue;
-              const route  = String(r[col['노선명']]  || '').trim();
-              const device = String(r[col['디바이스']] || '').trim();
-              const dateRaw = r[col['일자']];
-              const date = parseDate(dateRaw);
-              const key = `${kw}__${mediaLabel}__${route}__${device}`;
-              if (!kwMap[key]) kwMap[key] = { keyword:kw, media:mediaLabel, route, device, daily:{} };
-              if (date) {
-                if (!kwMap[key].daily[date]) kwMap[key].daily[date] = {impr:0,clicks:0,cost:0,conv:0,revenue:0};
-                const d = kwMap[key].daily[date];
-                d.impr    += pn(r[col['노출']]);
-                d.clicks  += pn(r[col['클릭']]);
-                d.cost    += pn(r[col['광고비']]);
-                d.conv    += pn(r[col['총 전환']]);
-                d.revenue += pn(r[col['총 전환매출']]);
-              }
-            }
-          }
-
-          if (!Object.keys(kwMap).length) { UI.hideLoading(); alert('키워드 데이터를 찾을 수 없습니다.'); return; }
-          KWStore.load(kwMap);
-          UI.hideLoading();
-          KWUI.render();
-          JBStorage.saveKeyword(file.name, kwMap);
-          document.getElementById('btn-reset-kw').classList.remove('hidden');
-          Deployer.autoDeploy();
+          this._parseWorkbook(wb, file.name);
         } catch(err) {
           UI.hideLoading();
           alert('파싱 오류: ' + err.message);
@@ -1702,6 +1673,102 @@ const KWParser = {
       }, 50);
     };
     reader.readAsArrayBuffer(file);
+  },
+
+  _parseWorkbook(wb, fileName) {
+    try {
+      const keywordAliases = KW_FIELD_SCHEMA.keyword.aliases;
+      const sheets = wb.SheetNames.map(name => {
+        const ws = wb.Sheets[name];
+        const all = XLSX.utils.sheet_to_json(ws, { header:1, raw:true, defval:null });
+        if (all.length < 2) return null;
+        const header = (all[0] || []).map(h => String(h||'').trim());
+        const hasKeyword = header.some(h => keywordAliases.some(a => a.toLowerCase() === h.toLowerCase()));
+        return hasKeyword ? { name, header, all } : null;
+      }).filter(Boolean);
+
+      if (!sheets.length) { UI.hideLoading(); alert('키워드 데이터를 찾을 수 없습니다. (키워드 컬럼이 있는 시트가 없음)'); return; }
+
+      // 컬럼 매핑: 첫 매칭 시트 헤더를 기준으로 캐시 확인 → 자동감지 → 부족하면 수동 매핑 모달
+      const canonicalHeaders = sheets[0].header;
+      const cached = KWSchemaMap.loadCached(canonicalHeaders);
+      if (cached) {
+        KWSchemaMap.mapping = { ...cached.mapping };
+        KWSchemaMap.headers = canonicalHeaders;
+      } else {
+        KWSchemaMap.autoMap(canonicalHeaders);
+      }
+
+      if (KWSchemaMap.hasCriticalMissing()) {
+        UI.hideLoading();
+        KWMappingUI.open(canonicalHeaders, () => {
+          UI.showLoading('키워드 데이터 파싱 중...');
+          setTimeout(() => this._finishParse(fileName, sheets, canonicalHeaders), 30);
+        });
+        return;
+      }
+      this._finishParse(fileName, sheets, canonicalHeaders);
+    } catch(err) {
+      UI.hideLoading();
+      alert('파싱 오류: ' + err.message);
+    }
+  },
+
+  _finishParse(fileName, sheets, canonicalHeaders) {
+    try {
+      const pn = v => (typeof v === 'number' ? v : parseFloat(String(v||'').replace(/,/g,''))||0);
+      const keywordCol = KWSchemaMap.get('keyword'), dateCol = KWSchemaMap.get('date');
+      const imprCol = KWSchemaMap.get('impr'), clicksCol = KWSchemaMap.get('clicks'), costCol = KWSchemaMap.get('cost');
+      const convCol = KWSchemaMap.get('conv'), revCol = KWSchemaMap.get('revenue');
+
+      // 나머지 텍스트 컬럼 = 동적 차원. 파일 내 모든 시트가 동일 템플릿이라고 가정하고 첫 시트 기준으로 결정.
+      const dimHeaderNames = KWSchemaMap.dimHeaders(canonicalHeaders, sheets[0].all.slice(1));
+      const dims = dimHeaderNames.map(kwDimDef);
+
+      const kwMap = {};
+      sheets.forEach(({ name, header, all }) => {
+        const mediaLabel = KW_SHEET_MEDIA_ALIAS[name] || name;
+        const idx = colName => header.findIndex(h => h.toLowerCase() === String(colName||'').toLowerCase());
+        const iKw = idx(keywordCol), iDate = idx(dateCol), iImpr = idx(imprCol), iClicks = idx(clicksCol), iCost = idx(costCol);
+        const iConv = convCol ? idx(convCol) : -1, iRev = revCol ? idx(revCol) : -1;
+        const dimIdx = dimHeaderNames.map(h => idx(h));
+
+        for (let i = 1; i < all.length; i++) {
+          const r = all[i] || [];
+          const kw = String(r[iKw] || '').trim();
+          if (!kw || kw === '합계' || kw === '필터구간') continue;
+          const dimVals = dims.map((d, di) => String(r[dimIdx[di]] || '').trim());
+          const date = parseDate(r[iDate]);
+          const key = [kw, mediaLabel, ...dimVals].join('__');
+          if (!kwMap[key]) {
+            kwMap[key] = { keyword:kw, media:mediaLabel, daily:{} };
+            dims.forEach((d, di) => { kwMap[key][d.key] = dimVals[di]; });
+          }
+          if (date) {
+            if (!kwMap[key].daily[date]) kwMap[key].daily[date] = {impr:0,clicks:0,cost:0,conv:0,revenue:0};
+            const d = kwMap[key].daily[date];
+            d.impr    += pn(r[iImpr]);
+            d.clicks  += pn(r[iClicks]);
+            d.cost    += pn(r[iCost]);
+            d.conv    += iConv>=0 ? pn(r[iConv]) : 0;
+            d.revenue += iRev>=0 ? pn(r[iRev]) : 0;
+          }
+        }
+      });
+
+      if (!Object.keys(kwMap).length) { UI.hideLoading(); alert('키워드 데이터를 찾을 수 없습니다.'); return; }
+
+      KWSchemaMap.saveCached(canonicalHeaders, dims);
+      KWStore.load(kwMap, dims);
+      UI.hideLoading();
+      KWUI.render();
+      JBStorage.saveKeyword(fileName, kwMap, dims);
+      document.getElementById('btn-reset-kw').classList.remove('hidden');
+      Deployer.autoDeploy();
+    } catch(err) {
+      UI.hideLoading();
+      alert('파싱 오류: ' + err.message);
+    }
   },
 };
 
@@ -1757,6 +1824,7 @@ const KWUI = {
   render() {
     document.getElementById('kw-empty').classList.add('hidden');
     document.getElementById('kw-main').classList.remove('hidden');
+    this.loadGradeCfg();
     this.renderFilters();
     this.renderKPIs();
     this.renderConvKeywords();
@@ -1768,7 +1836,8 @@ const KWUI = {
   renderFilters() {
     const dates = KWStore.allDates || [];
     const minD = dates[0]||'', maxD = dates[dates.length-1]||'';
-    const KW_DIM_LABELS = { media:'매체', route:'분류', device:'디바이스' };
+    const KW_DIM_LABELS = { media:'매체' };
+    KWStore.dimDefs.forEach(d => { KW_DIM_LABELS[d.key] = d.label; });
     const MEDIA_DOTS = { '네이버':'#03c75a','구글':'#4285f4','카카오':'#f7c600','당근':'#ff6f00' };
     const refresh = () => {
       const { from, to } = DP.getRange('dp-keyword');
@@ -1833,24 +1902,43 @@ const KWUI = {
   },
 
   renderGrade() {
+    const cfg = KWStore.gradeCfg();
+    const M = KWStore.GRADE_META;
     const counts = { scale:0, watch:0, review:0 };
     KWStore.filtered.filter(r=>r.cost>0).forEach(r => { const g=KWStore.grade(r); if(counts[g]!==undefined) counts[g]++; });
     document.getElementById('kw-grade-bar').innerHTML = `
-      <div class="grade-card scale"><div class="grade-num">${this.fmtN(counts.scale)}</div><div class="grade-label">🟢 확장 (ROAS ≥ 3)</div></div>
-      <div class="grade-card watch"><div class="grade-num">${this.fmtN(counts.watch)}</div><div class="grade-label">🟡 유지 (ROAS 1~3)</div></div>
-      <div class="grade-card review"><div class="grade-num">${this.fmtN(counts.review)}</div><div class="grade-label">🔴 점검 (전환 0 or ROAS &lt; 1)</div></div>
+      <div class="grade-card scale"><div class="grade-num">${this.fmtN(counts.scale)}</div><div class="grade-label">🟢 ${M.scale.label} (ROAS ≥ ${cfg.scaleRoas})</div></div>
+      <div class="grade-card watch"><div class="grade-num">${this.fmtN(counts.watch)}</div><div class="grade-label">🟡 ${M.watch.label} (ROAS ${cfg.watchRoas}~${cfg.scaleRoas})</div></div>
+      <div class="grade-card review"><div class="grade-num">${this.fmtN(counts.review)}</div><div class="grade-label">🔴 ${M.review.label} (전환 0 or ROAS &lt; ${cfg.watchRoas})</div></div>
     `;
+    const caption = document.getElementById('kw-grade-caption');
+    if (caption) caption.innerHTML = `🟢 ${M.scale.label}: ROAS ≥ ${cfg.scaleRoas} &nbsp;|&nbsp; 🟡 ${M.watch.label}: ROAS ${cfg.watchRoas}~${cfg.scaleRoas} 또는 전환 없음 &nbsp;|&nbsp; 🔴 ${M.review.label}: 광고비 소진 + 전환 0 또는 ROAS &lt; ${cfg.watchRoas}`;
+  },
+
+  saveGradeCfg() {
+    const v = id => parseFloat(document.getElementById(id)?.value) || 0;
+    const cfg = { scaleRoas: v('kw-grade-scale') || 3, watchRoas: v('kw-grade-watch') || 1 };
+    localStorage.setItem('jb_kw_grade', JSON.stringify(cfg));
+    this.renderGrade();
+    this.renderTable();
+  },
+
+  loadGradeCfg() {
+    const cfg = KWStore.gradeCfg();
+    const scaleEl = document.getElementById('kw-grade-scale'), watchEl = document.getElementById('kw-grade-watch');
+    if (scaleEl) scaleEl.value = cfg.scaleRoas;
+    if (watchEl) watchEl.value = cfg.watchRoas;
   },
 
   renderTable() {
     const s = KWStore.page, e = s * KWStore.perPage, rows = KWStore.filtered;
     const paged = rows.slice((s-1)*KWStore.perPage, e);
-    const gradeInfo = { scale:['#16a34a','확장'], watch:['#d97706','유지'], review:['#dc2626','점검'], none:['#9ca3af','-'] };
     const mediaCls  = { '네이버':'naver','구글':'google','카카오':'kakao','당근':'daangn' };
+    const dimCols = KWStore.dimDefs.map(d => ({ key:d.key, label:d.label, sort:false }));
     const cols = [
       { key:'keyword',label:'키워드',sort:false },
       { key:'media',  label:'매체',  sort:false },
-      { key:'route',  label:'노선',  sort:false },
+      ...dimCols,
       { key:'impr',   label:'노출수' },
       { key:'clicks', label:'클릭' },
       { key:'ctr',    label:'CTR(%)' },
@@ -1871,12 +1959,12 @@ const KWUI = {
 
     document.getElementById('kw-tbody').innerHTML = paged.map(r => {
       const g = KWStore.grade(r);
-      const [gc, gl] = gradeInfo[g] || gradeInfo.none;
-      const kw=r.keyword.replace(/'/g,"\\'"), rt=(r.route||'').replace(/'/g,"\\'");
-      return `<tr class="kw-row-click" onclick="KWUI.showTrend('${kw}','${r.media}','${rt}','${r.device}')">
+      const M = KWStore.GRADE_META[g] || KWStore.GRADE_META.none;
+      const keyEsc = String(r.key||'').replace(/'/g,"\\'");
+      return `<tr class="kw-row-click" onclick="KWUI.showTrend('${keyEsc}')">
         <td>${r.keyword}</td>
         <td><span class="kw-media-tag ${mediaCls[r.media]||''}">${r.media}</span></td>
-        <td>${r.route||'-'}</td>
+        ${dimCols.map(d => `<td>${r[d.key]||'-'}</td>`).join('')}
         <td>${this.fmtN(r.impr)}</td>
         <td>${this.fmtN(r.clicks)}</td>
         <td>${this.fmtP(r.ctr)}</td>
@@ -1886,7 +1974,7 @@ const KWUI = {
         <td>${r.conv>0?this.fmtW(r.cpa):'-'}</td>
         <td>${r.revenue>0?this.fmtW(r.revenue):'-'}</td>
         <td>${r.roas>0?this.fmtR(r.roas):'-'}</td>
-        <td><span class="grade-dot" style="background:${gc}"></span>${gl}</td>
+        <td><span class="grade-dot" style="background:${M.color}"></span>${M.label}</td>
       </tr>`;
     }).join('');
 
@@ -1937,7 +2025,7 @@ const KWUI = {
       KWStore.raw.forEach(r => {
         const d = r.daily?.[prevDate];
         if (!d) return;
-        const key = `${r.keyword}__${r.media}__${r.route}__${r.device}`;
+        const key = r.key;
         prevMap[key] = {
           conv: d.conv,
           cpa:  d.conv>0 ? d.cost/d.conv    : 0,
@@ -1953,7 +2041,7 @@ const KWUI = {
       const d = r.daily?.[maxDate];
       if (!d || d.conv <= 0) return;
       allRows.push({
-        keyword: r.keyword, media: r.media, route: r.route, device: r.device,
+        key: r.key, keyword: r.keyword, media: r.media, route: r.route, device: r.device,
         impr: d.impr, clicks: d.clicks, cost: d.cost, conv: d.conv, revenue: d.revenue,
         ctr:  d.impr>0 ? d.clicks/d.impr*100 : 0,
         cpa:  d.conv>0 ? d.cost/d.conv       : 0,
@@ -2063,8 +2151,8 @@ const KWUI = {
     };
 
     const tableRows = visible.map(r => {
-      const kw = r.keyword.replace(/'/g,"\\'"), rt = (r.route||'').replace(/'/g,"\\'");
-      return `<tr class="kw-row-click" onclick="KWUI.showTrend('${kw}','${r.media}','${rt}','${r.device}')">
+      const keyEsc = String(r.key||'').replace(/'/g,"\\'");
+      return `<tr class="kw-row-click" onclick="KWUI.showTrend('${keyEsc}')">
         <td style="font-weight:600;color:#1a1d2e;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.keyword}</td>
         <td>${r.route||'-'}</td>
         <td>${r.device}</td>
@@ -2121,12 +2209,13 @@ const KWUI = {
   _trendChart: null,
   _trendMetric: 'cost',
 
-  showTrend(keyword, media, route, device) {
-    const entry = KWStore.raw.find(r => r.keyword===keyword && r.media===media && r.route===route && r.device===device);
+  showTrend(key) {
+    const entry = KWStore.raw.find(r => r.key === key);
     const modal = document.getElementById('kw-trend-modal');
     const canvas = document.getElementById('kw-trend-canvas');
     const noData = document.getElementById('kw-trend-no-data');
-    document.getElementById('kw-trend-title').textContent = `📈 ${keyword} · ${media} · ${device}${route?' · '+route:''}`;
+    const dimLabel = entry ? KWStore.dimDefs.map(d => entry[d.key]).filter(Boolean).join(' · ') : '';
+    document.getElementById('kw-trend-title').textContent = `📈 ${entry?.keyword||''} · ${entry?.media||''}${dimLabel?' · '+dimLabel:''}`;
     modal.classList.remove('hidden');
 
     if (!entry?.daily || Object.keys(entry.daily).length === 0) {
@@ -2231,16 +2320,16 @@ const JBStorage = {
     });
   },
 
-  async saveKeyword(fileName, kwMap) {
+  async saveKeyword(fileName, kwMap, dims) {
     try {
       const db = await this._getDB();
       if (!db) return;
       const tx = db.transaction('kw', 'readwrite');
       const store = tx.objectStore('kw');
       store.clear();
-      store.put({ id: '__meta__', fileName, savedAt: Date.now() });
+      store.put({ id: '__meta__', fileName, savedAt: Date.now(), dims });
       for (const [id, e] of Object.entries(kwMap)) {
-        store.put({ id, keyword: e.keyword, media: e.media, route: e.route, device: e.device, daily: e.daily });
+        store.put({ id, ...e });
       }
       await new Promise(res => { tx.oncomplete = res; tx.onerror = res; });
     } catch(e) { console.warn('키워드 자동저장 실패:', e.message); }
@@ -2256,11 +2345,11 @@ const JBStorage = {
         req.onerror = () => res([]);
       });
       const meta = all.find(x => x.id === '__meta__');
+      // 구버전(dims 메타 없음) IndexedDB 레코드는 노선/디바이스 2차원 포맷으로 정규화 — Notes._normalizeNote와 동일한 read-시점 마이그레이션 원칙.
+      const dims = meta?.dims !== undefined ? meta.dims : [{key:'route',label:'노선'},{key:'device',label:'디바이스'}];
       const kwMap = {};
-      all.filter(x => x.id !== '__meta__').forEach(({ id, keyword, media, route, device, daily }) => {
-        kwMap[id] = { keyword, media, route, device, daily };
-      });
-      return Object.keys(kwMap).length ? { fileName: meta?.fileName, kwMap } : null;
+      all.filter(x => x.id !== '__meta__').forEach(({ id, ...rest }) => { kwMap[id] = rest; });
+      return Object.keys(kwMap).length ? { fileName: meta?.fileName, kwMap, dims } : null;
     } catch(e) { return null; }
   },
 
@@ -2287,7 +2376,7 @@ const JBStorage = {
     }
     const k = await this.loadKeyword();
     if (k?.kwMap) {
-      KWStore.load(k.kwMap);
+      KWStore.load(k.kwMap, k.dims);
       KWUI.render();
     }
   },
@@ -2466,6 +2555,58 @@ const MappingUI = {
     badge.style.borderColor = warn ? 'var(--orange)' : 'var(--green)';
     badge.style.color = warn ? 'var(--orange)' : 'var(--green)';
     badge.classList.remove('hidden');
+  },
+};
+
+// ── 키워드 컬럼 매핑 UI (MappingUI와 동일 패턴, 키워드 탭 전용) ──────────────────
+const KWMappingUI = {
+  _resume: null, _headers: [],
+
+  open(headers, resume) {
+    this._headers = headers;
+    this._resume = resume;
+    document.getElementById('m-kw-schema').classList.remove('hidden');
+    this._render();
+  },
+
+  close() { document.getElementById('m-kw-schema').classList.add('hidden'); },
+
+  _render() {
+    const rows = Object.entries(KW_FIELD_SCHEMA).map(([field, cfg]) => {
+      const cur = KWSchemaMap.get(field) || '';
+      const opts = `<option value="">— 매핑 없음 —</option>` +
+        this._headers.map(h => `<option value="${h}"${h===cur?' selected':''}>${h}</option>`).join('');
+      const ok = !!cur;
+      const icon = ok ? '✓' : (cfg.required ? '⚠' : '○');
+      const clr = ok ? 'var(--green)' : (cfg.required ? 'var(--orange)' : 'var(--muted)');
+      return `<tr style="border-bottom:1px solid var(--border);">
+        <td style="color:${clr};font-weight:700;padding:6px 8px;width:20px;">${icon}</td>
+        <td style="font-size:12px;padding:6px 4px;white-space:nowrap;">
+          ${cfg.label}${cfg.required ? '<span style="color:var(--red)">*</span>' : ''}
+        </td>
+        <td style="padding:4px 0 4px 8px;">
+          <select class="f-input kw-schema-sel" data-field="${field}"
+            style="width:100%;font-size:12px;padding:4px 8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;">
+            ${opts}
+          </select>
+        </td>
+      </tr>`;
+    }).join('');
+    document.getElementById('kw-schema-table-body').innerHTML = rows;
+  },
+
+  save() {
+    document.querySelectorAll('.kw-schema-sel').forEach(sel => {
+      KWSchemaMap.set(sel.dataset.field, sel.value || null);
+    });
+    if (KWSchemaMap.hasCriticalMissing()) {
+      alert('필수 컬럼(*)을 모두 매핑해야 합니다.');
+      return;
+    }
+    this.close();
+    const resume = this._resume;
+    this._resume = null;
+    resume?.();
   },
 };
 
@@ -2990,9 +3131,9 @@ async function initDashboard() {
   try {
     const res = await fetch(`${RAW}/kw_data.json?t=${Date.now()}`);
     if (res.ok) {
-      const { dateFrom, dateTo, rows } = await res.json();
+      const { dateFrom, dateTo, rows, dims, actionQueue } = await res.json();
       if (rows?.length) {
-        KWStore.loadAggregated(rows, dateFrom, dateTo);
+        KWStore.loadAggregated(rows, dateFrom, dateTo, dims, actionQueue);
         KWUI.render();
         kwLoaded = true;
       }

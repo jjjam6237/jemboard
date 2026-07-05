@@ -289,9 +289,15 @@
 
       <!-- 성과 등급 -->
       <div class="kw-card" id="kw-card-grade">
-        <div class="kw-section-title">🏅 키워드 성과 등급</div>
+        <div class="kw-section-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+          <span>🏅 키워드 성과 등급</span>
+          <div style="display:flex;gap:10px;align-items:center;font-size:11px;color:var(--muted);font-weight:400;">
+            <span>확장 ROAS≥<input type="text" class="pacing-inp" id="kw-grade-scale" style="width:44px;display:inline-block;" oninput="KWUI.saveGradeCfg()"></span>
+            <span>유지 ROAS≥<input type="text" class="pacing-inp" id="kw-grade-watch" style="width:44px;display:inline-block;" oninput="KWUI.saveGradeCfg()"></span>
+          </div>
+        </div>
         <div class="grade-bar" id="kw-grade-bar"></div>
-        <div style="font-size:11px;color:#9ca3af;margin-top:8px;">🟢 확장: ROAS ≥ 3 &nbsp;|&nbsp; 🟡 유지: ROAS 1~3 또는 전환 없음 &nbsp;|&nbsp; 🔴 점검: 광고비 소진 + 전환 0 또는 ROAS &lt; 1</div>
+        <div id="kw-grade-caption" style="font-size:11px;color:#9ca3af;margin-top:8px;"></div>
       </div>
 
       <!-- 차트 -->
@@ -457,6 +463,25 @@
     <div class="modal-actions" style="margin-top:16px;">
       <button class="btn btn-secondary" onclick="MappingUI.close()">취소</button>
       <button class="btn btn-primary" onclick="MappingUI.save()">적용하기</button>
+    </div>
+  </div>
+</div>
+
+<!-- Keyword schema mapping modal -->
+<div id="m-kw-schema" class="overlay hidden" onclick="if(event.target===this)KWMappingUI.close()">
+  <div class="modal" style="width:460px;max-height:80vh;display:flex;flex-direction:column;">
+    <div class="modal-title">🗺 키워드 컬럼 매핑 설정</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">
+      필수 컬럼을 자동으로 찾지 못했습니다. 파일 헤더와 연결해 주세요. <span style="color:var(--red);">*</span> 는 필수 필드입니다.
+    </div>
+    <div style="overflow-y:auto;flex:1;">
+      <table style="width:100%;border-collapse:collapse;">
+        <tbody id="kw-schema-table-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-secondary" onclick="KWMappingUI.close()">취소</button>
+      <button class="btn btn-primary" onclick="KWMappingUI.save()">적용하기</button>
     </div>
   </div>
 </div>

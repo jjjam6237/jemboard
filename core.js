@@ -287,6 +287,99 @@ const Store = {
   },
 };
 
+// ── 키워드 탭 스키마 (범용 광고주 지원) ──────────────────────────────────────────
+const KW_FIELD_SCHEMA = {
+  keyword: { label:'키워드',   required:true,  aliases:['키워드','keyword','Keyword','검색어'] },
+  date:    { label:'일자',     required:true,  aliases:['일자','날짜','date','Date'] },
+  impr:    { label:'노출수',   required:true,  aliases:['노출','노출수','impressions','Impressions'] },
+  clicks:  { label:'클릭수',   required:true,  aliases:['클릭','클릭수','clicks','Clicks'] },
+  cost:    { label:'광고비',   required:true,  aliases:['광고비','비용','cost','Cost','지출'] },
+  conv:    { label:'전환수',   required:false, aliases:['총 전환','전환수','전환','conversions','Conversions'] },
+  revenue: { label:'전환매출', required:false, aliases:['총 전환매출','전환매출','매출','revenue','Revenue'] },
+};
+
+// 기존 제주항공 포맷 하위호환: 시트명 → 매체 라벨. 매칭 안 되면 시트명을 그대로 매체 라벨로 사용.
+const KW_SHEET_MEDIA_ALIAS = { 'N_통합':'네이버', 'G_통합':'구글', 'K_통합':'카카오', 'D_통합':'당근' };
+
+// 매칭 안 된 나머지 텍스트 컬럼이 기존 '노선'/'디바이스'와 같은 의미면 익숙한 key/label을 부여(하위호환),
+// 그 외 컬럼은 헤더명을 그대로 key/label로 삼아 동적 차원으로 취급한다.
+const KW_DIM_ALIAS = {
+  route:  { label:'노선',    aliases:['노선명','노선','대노선 구분','분류','route','Route','Category'] },
+  device: { label:'디바이스', aliases:['디바이스','device','Device'] },
+};
+function kwDimDef(header) {
+  const h = String(header || '').trim();
+  for (const [key, cfg] of Object.entries(KW_DIM_ALIAS)) {
+    if (cfg.aliases.some(a => a.toLowerCase() === h.toLowerCase())) return { key, label: cfg.label };
+  }
+  return { key: h, label: h };
+}
+
+// 일별 합계 → 파생지표. KWStore._agg(기간 제한 있음)와 액션 큐(전체기간, from/to=null)가 공용으로 사용.
+function sumDaily(daily, from, to) {
+  const tot = { impr:0, clicks:0, cost:0, conv:0, revenue:0 };
+  Object.entries(daily || {}).forEach(([d, v]) => {
+    if ((!from || d >= from) && (!to || d <= to)) {
+      tot.impr += v.impr; tot.clicks += v.clicks; tot.cost += v.cost; tot.conv += v.conv; tot.revenue += v.revenue;
+    }
+  });
+  tot.ctr  = tot.impr>0   ? tot.clicks/tot.impr*100 : 0;
+  tot.cpc  = tot.clicks>0 ? tot.cost/tot.clicks     : 0;
+  tot.cpa  = tot.conv>0   ? tot.cost/tot.conv        : 0;
+  tot.roas = tot.cost>0   ? tot.revenue/tot.cost     : 0;
+  return tot;
+}
+
+// ── 키워드 스키마 매핑 (SchemaMap과 동일 패턴, 키워드 탭 전용 — 캠페인 탭 코드는 건드리지 않음) ──
+const KWSchemaMap = {
+  mapping: {}, headers: [],
+  KEY: 'jb_kw_schema_map',
+
+  autoMap(headers) {
+    this.headers = headers;
+    this.mapping = {};
+    for (const [field, cfg] of Object.entries(KW_FIELD_SCHEMA)) {
+      const match = headers.find(h => cfg.aliases.some(a => a.toLowerCase() === String(h).toLowerCase()));
+      this.mapping[field] = match || null;
+    }
+  },
+  set(field, header) { this.mapping[field] = header || null; },
+  get(field) { return this.mapping[field] || null; },
+  getMappedCount() { return Object.values(this.mapping).filter(Boolean).length; },
+  hasCriticalMissing() {
+    return Object.entries(KW_FIELD_SCHEMA).some(([f, cfg]) => cfg.required && !this.mapping[f]);
+  },
+
+  // 매핑되지 않은 나머지 헤더 중 "텍스트 컬럼"만 동적 차원 후보로 반환.
+  // 샘플 20행 중 숫자로 파싱되는 비율이 80% 이상이면 수치 컬럼으로 보고 제외(중복 지표 컬럼 노이즈 방지).
+  dimHeaders(headers, sampleRows) {
+    const used = new Set(Object.values(this.mapping).filter(Boolean));
+    return headers.filter(h => {
+      if (!h || used.has(h)) return false;
+      const idx = headers.indexOf(h);
+      const sample = sampleRows.slice(0, 20).map(r => r[idx]).filter(v => v !== null && v !== undefined && v !== '');
+      if (!sample.length) return true;
+      const numericCount = sample.filter(v => typeof v === 'number' || !isNaN(parseFloat(String(v).replace(/,/g,'')))).length;
+      return numericCount / sample.length < 0.8;
+    });
+  },
+
+  // localStorage에 헤더 시그니처별로 매핑 결과 캐시 — 같은 포맷 재업로드 시 모달 없이 재사용.
+  loadCached(headers) {
+    try {
+      const all = JSON.parse(localStorage.getItem(this.KEY) || '{}');
+      return all[headers.join('|')] || null;
+    } catch(e) { return null; }
+  },
+  saveCached(headers, dims) {
+    try {
+      const all = JSON.parse(localStorage.getItem(this.KEY) || '{}');
+      all[headers.join('|')] = { mapping: { ...this.mapping }, dims };
+      localStorage.setItem(this.KEY, JSON.stringify(all));
+    } catch(e) {}
+  },
+};
+
 // ── PARSER ────────────────────────────────────────────────────────────────────
 const Parser = {
   load(file) {
