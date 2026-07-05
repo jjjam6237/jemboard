@@ -159,6 +159,27 @@
     .grade-card.review .grade-num { color: #dc2626; }
     .grade-label { font-size: 11px; color: #6b7280; margin-top: 3px; }
 
+    .aq-settings { display: flex; flex-wrap: wrap; gap: 16px; margin: 10px 0 14px; padding: 10px 12px; background: #f8fafc; border: 1px solid #e2e6f0; border-radius: 8px; }
+    .aq-setting { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: #6b7280; }
+    .aq-setting label { font-weight: 600; }
+    .aq-setting input[type="range"] { width: 140px; accent-color: #3a7fd4; }
+    .aq-setting input[type="text"] { width: 70px; padding: 4px 8px; border: 1px solid #e2e6f0; border-radius: 6px; font-size: 12px; }
+    .aq-hide-done { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #6b7280; cursor: pointer; }
+    .aq-hide-done input { accent-color: #3a7fd4; cursor: pointer; }
+    .aq-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .aq-col-title { font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 8px; }
+    .aq-hint { font-size: 11px; color: #d97706; margin-bottom: 8px; }
+    .aq-empty { font-size: 12px; color: #9ca3af; padding: 14px 0; text-align: center; }
+    .aq-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 6px; border-bottom: 1px solid #f0f3f8; cursor: pointer; }
+    .aq-item:last-child { border-bottom: none; }
+    .aq-item input { margin-top: 2px; accent-color: #3a7fd4; cursor: pointer; }
+    .aq-item-body { display: flex; flex-direction: column; gap: 2px; }
+    .aq-item-title { font-size: 12.5px; font-weight: 600; color: #1a1d2e; }
+    .aq-item-media { font-weight: 400; color: #9ca3af; }
+    .aq-item-reason { font-size: 11px; color: #6b7280; }
+    .aq-item.done { opacity: .5; }
+    .aq-item.done .aq-item-title, .aq-item.done .aq-item-reason { text-decoration: line-through; }
+
     .kw-table-wrap { overflow-x: auto; }
     .kw-table { width: 100%; border-collapse: collapse; font-size: 12px; white-space: nowrap; }
     .kw-table th { padding: 9px 13px; text-align: right; font-weight: 600; color: #6b7280; font-size: 11px; border-bottom: 2px solid #e2e6f0; cursor: pointer; }

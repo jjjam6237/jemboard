@@ -1831,6 +1831,7 @@ const KWUI = {
     this.renderGrade();
     KWCh.renderAll();
     this.renderTable();
+    ActionQueueUI.render();
   },
 
   renderFilters() {
@@ -1921,6 +1922,7 @@ const KWUI = {
     localStorage.setItem('jb_kw_grade', JSON.stringify(cfg));
     this.renderGrade();
     this.renderTable();
+    ActionQueueUI.render();
   },
 
   loadGradeCfg() {
@@ -2277,6 +2279,116 @@ const KWUI = {
     document.getElementById('kw-trend-modal').classList.add('hidden');
     if (this._trendChart) { this._trendChart.destroy(); this._trendChart = null; }
     this._trendEntry = null;
+  },
+};
+
+// ── 키워드 액션 큐 UI ────────────────────────────────────────────────────────────
+// 로컬/업로드 모드(KWStore._isAggregated===false)에서는 KWStore.raw(daily 있음)로 매번 새로 계산.
+// 뷰어 모드(집계 데이터만 배포됨)에서는 배포 시점에 계산되어 실려온 KWStore.actionQueue를 그대로 렌더링.
+// 완료 상태는 두 모드 모두 localStorage(jb_action_done)의 로컬 오버라이드를 병합해서 최종 결정한다.
+const ActionQueueUI = {
+  CFG_KEY: 'jb_action_cfg',
+  DONE_KEY: 'jb_action_done',
+
+  cfg() {
+    try { return { excludeDays:14, minClicks:10, marginPct:80, ...JSON.parse(localStorage.getItem(this.CFG_KEY)||'{}') }; }
+    catch(e) { return { excludeDays:14, minClicks:10, marginPct:80 }; }
+  },
+  doneMap() {
+    try { return JSON.parse(localStorage.getItem(this.DONE_KEY) || '{}'); }
+    catch(e) { return {}; }
+  },
+
+  saveCfg() {
+    const cfg = {
+      excludeDays: parseInt(document.getElementById('aq-days')?.value) || 14,
+      minClicks:   parseInt((document.getElementById('aq-minclicks')?.value||'').replace(/[^0-9]/g,'')) || 10,
+      marginPct:   parseInt(document.getElementById('aq-margin')?.value) || 80,
+    };
+    localStorage.setItem(this.CFG_KEY, JSON.stringify(cfg));
+    this.render();
+  },
+
+  loadCfgInputs() {
+    const cfg = this.cfg();
+    const daysEl = document.getElementById('aq-days'), clicksEl = document.getElementById('aq-minclicks'), marginEl = document.getElementById('aq-margin');
+    if (daysEl) daysEl.value = cfg.excludeDays;
+    if (clicksEl) clicksEl.value = cfg.minClicks;
+    if (marginEl) marginEl.value = cfg.marginPct;
+    const daysVal = document.getElementById('aq-days-val'), marginVal = document.getElementById('aq-margin-val');
+    if (daysVal) daysVal.textContent = cfg.excludeDays;
+    if (marginVal) marginVal.textContent = cfg.marginPct;
+  },
+
+  _buildLocal() {
+    const cfg = this.cfg();
+    let targets; try { targets = JSON.parse(localStorage.getItem('jb_targets')||'{}'); } catch(e) { targets = {}; }
+    const exclude = ActionQueue.detectExclusion(KWStore.raw, KWStore.allDates, cfg);
+    const scaleUp = ActionQueue.detectScaleUp(KWStore.raw, targets.cpa||0, cfg, r => KWStore.grade(r));
+    return { exclude, scaleUp, hasTargetCpa: !!targets.cpa };
+  },
+
+  _current() {
+    if (!KWStore._isAggregated) return this._buildLocal();
+    const aq = KWStore.actionQueue;
+    return { exclude: aq?.exclude || [], scaleUp: aq?.scaleUp || [], hasTargetCpa: aq?.hasTargetCpa ?? true };
+  },
+
+  render() {
+    const card = document.getElementById('kw-card-actionqueue');
+    if (!card) return;
+    this.loadCfgInputs();
+    const { exclude, scaleUp, hasTargetCpa } = this._current();
+    const done = this.doneMap();
+    const hideDone = document.getElementById('aq-hide-done')?.checked;
+
+    // 로컬 오버라이드(jb_action_done)가 있으면 그 값이 우선 — 배포된 done을 껐다 켰다 둘 다 가능해야 함.
+    const withDone = (list, type) => list.map(item => {
+      const k = type + '__' + item.key;
+      const overridden = Object.prototype.hasOwnProperty.call(done, k);
+      return { ...item, type, done: overridden ? !!done[k] : !!item.done };
+    });
+    const sortList = list => [...list].sort((a,b) => (a.done===b.done) ? 0 : (a.done ? 1 : -1));
+
+    const renderCol = (list, type, emptyMsg) => {
+      let items = withDone(list, type);
+      if (hideDone) items = items.filter(i => !i.done);
+      items = sortList(items);
+      if (!items.length) return `<div class="aq-empty">${emptyMsg}</div>`;
+      return items.map(i => `
+        <label class="aq-item${i.done?' done':''}">
+          <input type="checkbox" ${i.done?'checked':''} onchange="ActionQueueUI.toggleDone('${type}','${i.key.replace(/'/g,"\\'")}', this.checked)">
+          <span class="aq-item-body">
+            <span class="aq-item-title">${i.keyword} <span class="aq-item-media">(${i.media})</span></span>
+            <span class="aq-item-reason">${i.reason}</span>
+          </span>
+        </label>`).join('');
+    };
+
+    card.querySelector('#aq-exclude-list').innerHTML = renderCol(exclude, 'exclude', '현재 조건에서 후보 없음');
+    card.querySelector('#aq-scaleup-list').innerHTML = renderCol(scaleUp, 'scaleUp', '현재 조건에서 후보 없음');
+    const hint = card.querySelector('#aq-scaleup-hint');
+    if (hint) hint.classList.toggle('hidden', hasTargetCpa);
+
+    this._plainExclude = exclude;
+    this._plainScaleUp = scaleUp;
+  },
+
+  toggleDone(type, key, checked) {
+    const done = this.doneMap();
+    done[type+'__'+key] = checked;
+    localStorage.setItem(this.DONE_KEY, JSON.stringify(done));
+    this.render();
+    // 뷰어 모드(집계 데이터만 있음, PAT 없음)는 자동배포 대상이 아님 — 로컬 오버라이드로만 반영.
+    if (!KWStore._isAggregated) Deployer.autoDeploy();
+  },
+
+  copy(event) {
+    const lines = [];
+    (this._plainExclude||[]).forEach(i => lines.push(`[제외] ${i.keyword} (${i.media}) — ${i.reason}`));
+    (this._plainScaleUp||[]).forEach(i => lines.push(`[확장] ${i.keyword} (${i.media}) — ${i.reason}`));
+    const text = lines.length ? lines.join('\n') : '(현재 조건에서 후보 없음)';
+    Clipboard.copyWithFeedback(text, event?.currentTarget);
   },
 };
 
@@ -2653,8 +2765,16 @@ const Deployer = {
     }
     if (KWStore.raw?.length) {
       const kwRows = KWStore.raw.map(r => KWStore._agg(r)).filter(r => r.impr > 0 || r.cost > 0);
+      let targets; try { targets = JSON.parse(localStorage.getItem('jb_targets') || '{}'); } catch(e) { targets = {}; }
+      const cfg = ActionQueueUI.cfg();
+      const done = ActionQueueUI.doneMap();
+      const exclude = ActionQueue.detectExclusion(KWStore.raw, KWStore.allDates, cfg)
+        .map(i => ({ ...i, done: !!done['exclude__'+i.key] }));
+      const scaleUp = ActionQueue.detectScaleUp(KWStore.raw, targets.cpa || 0, cfg, r => KWStore.grade(r))
+        .map(i => ({ ...i, done: !!done['scaleUp__'+i.key] }));
       files.push({ path: 'kw_data.json', content: JSON.stringify({
-        dateFrom: KWStore.dateFrom, dateTo: KWStore.dateTo, rows: kwRows
+        dateFrom: KWStore.dateFrom, dateTo: KWStore.dateTo, rows: kwRows, dims: KWStore.dimDefs,
+        actionQueue: { generatedAt: new Date().toISOString(), cfg, hasTargetCpa: !!targets.cpa, exclude, scaleUp },
       })});
     }
     return files;

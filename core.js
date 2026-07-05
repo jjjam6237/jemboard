@@ -380,6 +380,43 @@ const KWSchemaMap = {
   },
 };
 
+// ── 키워드 액션 큐 (순수 함수 — KWStore 상태를 건드리지 않고 입력만으로 판정) ─────
+const ActionQueue = {
+  // rawRows: KWStore.raw(daily 있음, 로컬/업로드 모드에서만 호출). allDates: KWStore.allDates.
+  // cfg: { excludeDays, minClicks }. 최근 excludeDays일 클릭합 >= minClicks AND 전환합 === 0 이면 제외 후보.
+  detectExclusion(rawRows, allDates, cfg) {
+    const days = (allDates || []).slice(-cfg.excludeDays);
+    if (!days.length) return [];
+    const from = days[0], to = days[days.length - 1];
+    const out = [];
+    rawRows.forEach(r => {
+      const { clicks, conv } = sumDaily(r.daily, from, to);
+      if (clicks >= cfg.minClicks && conv === 0) {
+        out.push({ key:r.key, keyword:r.keyword, media:r.media, clicks, conv,
+          reason: `최근 ${cfg.excludeDays}일 클릭 ${Math.round(clicks)} / 전환 0` });
+      }
+    });
+    return out;
+  },
+
+  // 전체기간 집계 기준 grade==='scale'인 키워드 중, 목표 CPA가 있으면 CPA <= 목표 * (marginPct/100)인 것만.
+  // targetCpa가 없으면(0/미설정) grade만으로 선정.
+  detectScaleUp(rawRows, targetCpa, cfg, gradeFn) {
+    const out = [];
+    rawRows.forEach(r => {
+      const agg = sumDaily(r.daily, null, null);
+      if (gradeFn(agg) !== 'scale') return;
+      let reason = `등급 확장 (ROAS ${agg.roas.toFixed(2)}x)`;
+      if (targetCpa) {
+        if (!(agg.cpa > 0 && agg.cpa <= targetCpa * (cfg.marginPct / 100))) return;
+        reason += ` · CPA ${Math.round(agg.cpa).toLocaleString()} ≤ 목표×${cfg.marginPct}%`;
+      }
+      out.push({ key:r.key, keyword:r.keyword, media:r.media, cpa:agg.cpa, roas:agg.roas, reason });
+    });
+    return out;
+  },
+};
+
 // ── PARSER ────────────────────────────────────────────────────────────────────
 const Parser = {
   load(file) {

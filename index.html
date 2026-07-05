@@ -266,6 +266,7 @@
             <div class="nav-item" onclick="scrollToSection('kw-kpi-grid')"><span class="nav-dot"></span>KPI 카드</div>
             <div class="nav-item" onclick="scrollToSection('kw-conv-card')"><span class="nav-dot"></span>전일 전환 키워드</div>
             <div class="nav-item" onclick="scrollToSection('kw-card-grade')"><span class="nav-dot"></span>성과 등급</div>
+            <div class="nav-item" onclick="scrollToSection('kw-card-actionqueue')"><span class="nav-dot"></span>액션 큐</div>
             <div class="nav-item" onclick="scrollToSection('kw-card-charts')"><span class="nav-dot"></span>TOP 20 차트</div>
             <div class="nav-item" onclick="scrollToSection('kw-card-table')"><span class="nav-dot"></span>키워드 목록</div>
           </div>
@@ -298,6 +299,42 @@
         </div>
         <div class="grade-bar" id="kw-grade-bar"></div>
         <div id="kw-grade-caption" style="font-size:11px;color:#9ca3af;margin-top:8px;"></div>
+      </div>
+
+      <!-- 액션 큐 -->
+      <div class="kw-card" id="kw-card-actionqueue">
+        <div class="kw-section-title">
+          <span>⚡ 액션 큐</span>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <label class="aq-hide-done"><input type="checkbox" id="aq-hide-done" onchange="ActionQueueUI.render()"> 완료 숨기기</label>
+            <button class="btn btn-secondary btn-sm" onclick="ActionQueueUI.copy(event)">📋 복사</button>
+          </div>
+        </div>
+        <div class="aq-settings">
+          <div class="aq-setting">
+            <label>제외 판정 기간: <span id="aq-days-val">14</span>일</label>
+            <input type="range" min="3" max="30" id="aq-days" oninput="document.getElementById('aq-days-val').textContent=this.value;ActionQueueUI.saveCfg()">
+          </div>
+          <div class="aq-setting">
+            <label>최소 클릭수</label>
+            <input type="text" id="aq-minclicks" oninput="ActionQueueUI.saveCfg()">
+          </div>
+          <div class="aq-setting">
+            <label>CPA 여유율: <span id="aq-margin-val">80</span>%</label>
+            <input type="range" min="50" max="100" id="aq-margin" oninput="document.getElementById('aq-margin-val').textContent=this.value;ActionQueueUI.saveCfg()">
+          </div>
+        </div>
+        <div class="aq-cols">
+          <div>
+            <div class="aq-col-title">🚫 제외 후보</div>
+            <div id="aq-exclude-list"></div>
+          </div>
+          <div>
+            <div class="aq-col-title">📈 입찰 상향 후보</div>
+            <div id="aq-scaleup-hint" class="aq-hint hidden">목표 CPA를 설정하면 더 정밀해집니다 (사이드바 캠페인 탭 월 목표 설정)</div>
+            <div id="aq-scaleup-list"></div>
+          </div>
+        </div>
       </div>
 
       <!-- 차트 -->
